@@ -279,35 +279,43 @@ end
 
 function FolderMemory:_buildDisplayModeMenuTable()
     local modes = {
-        { _("Mosaic grid (cover view)"), "mosaic" },
-        { _("Detailed list"), "list" },
-        { _("Classic file browser"), "classic" },
+        { _("Classic (filename only)"), nil },
+        { _("Mosaic with cover images"), "mosaic_image" },
+        { _("Mosaic with text covers"), "mosaic_text" },
+        { _("Detailed list with cover images and metadata"), "list_image_meta" },
+        { _("Detailed list with metadata, no images"), "list_only_meta" },
+        { _("Detailed list with cover images and filenames"), "list_image_filename" },
     }
     local sub_item_table = {}
     for _, mode in ipairs(modes) do
+        local mode_label = mode[1]
+        local mode_key = mode[2]
         table.insert(sub_item_table, {
-            text = mode[1],
+            text = mode_label,
             checked_func = function()
-                return (_BookInfoManager:getSetting("filemanager_display_mode") or "mosaic") == mode[2]
+                local current = _BookInfoManager:getSetting("filemanager_display_mode")
+                return current == mode_key
             end,
             radio = true,
             callback = function()
                 local ui = FileManager.instance
                 if ui and ui.coverbrowser then
-                    ui.coverbrowser:setDisplayMode(mode[2])
+                    ui.coverbrowser:setDisplayMode(mode_key)
                 end
             end,
         })
     end
     return {
         text_func = function()
-            local dm = _BookInfoManager:getSetting("filemanager_display_mode") or "mosaic"
+            local dm = _BookInfoManager:getSetting("filemanager_display_mode")
             local names = {
-                mosaic = _("Mosaic grid"),
-                list = _("Detailed list"),
-                classic = _("Classic"),
+                mosaic_image = _("Mosaic with cover images"),
+                mosaic_text = _("Mosaic with text covers"),
+                list_image_meta = _("Detailed list with cover images and metadata"),
+                list_only_meta = _("Detailed list with metadata, no images"),
+                list_image_filename = _("Detailed list with cover images and filenames"),
             }
-            return T(_("Display mode: %1"), names[dm] or dm)
+            return T(_("Display mode: %1"), names[dm] or _("Classic"))
         end,
         sub_item_table = sub_item_table,
     }
@@ -420,8 +428,9 @@ function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
     -- | 6. Items per page (grid / list)   |
     -- +-----------------------------------+
     if _hasBookInfoManager then
-        local display_mode = _BookInfoManager:getSetting("filemanager_display_mode") or "mosaic"
-        if display_mode == "mosaic" then
+        local display_mode = _BookInfoManager:getSetting("filemanager_display_mode")
+        local mode_type = display_mode and display_mode:match("^(%a+)_") or nil
+        if mode_type == "mosaic" then
             -- Mosaic grid: columns × rows
             menu_items.mosaic_columns_portrait = {
                 text_func = function()
