@@ -34,6 +34,21 @@ local util = require("util")
 local logger = require("logger")
 
 local Memory = require("memory")
+
+-- Check for CoverBrowser (BookInfoManager) availability
+local _BookInfoManager = nil
+local _hasBookInfoManager = false
+do
+    local ok, bim = pcall(require, "bookinfomanager")
+    if ok and bim then
+        _hasBookInfoManager = true
+        _BookInfoManager = bim
+    end
+end
+
+local BookList = require("ui/widget/booklist")
+local SpinWidget = require("ui/widget/spinwidget")
+
 local FolderMemory = WidgetContainer:extend{
     name = "foldermemory",
     is_doc_only = false,
@@ -148,6 +163,12 @@ function FolderMemory:onDispatcherRegisterActions()
         title = _("FolderMemory: clear settings for current folder"),
         filemanager = true,
     })
+    Dispatcher:registerAction("config_folder_memory", {
+        category = "none",
+        event = "ConfigFolderMemory",
+        title = _("FolderMemory: configure this folder"),
+        filemanager = true,
+    })
 end
 
 function FolderMemory:onSaveFolderMemory()
@@ -179,6 +200,428 @@ function FolderMemory:onClearFolderMemory()
     })
 end
 
+function FolderMemory:onConfigFolderMemory()
+    local fc = self.ui.file_chooser
+    local path = fc and fc.path
+    if not path then
+        UIManager:show(InfoMessage:new{
+            text = _("This action is only available in File browser."),
+        })
+        return
+    end
+    self:_showConfigDialog(path)
+end
+
+-- +--------------------------------------------+
+-- | Helper: build book status filter submenu   |
+-- +--------------------------------------------+
+
+function FolderMemory:_buildBookStatusMenuTable(refresh_fn)
+    local statuses = { "new", "reading", "abandoned", "complete" }
+    local sub_item_table = {
+        {
+            text = BookList.getBookStatusString("all"):lower(),
+            checked_func = function()
+                return FileChooser.show_filter.status == nil
+            end,
+            radio = true,
+            callback = function()
+                FileChooser.show_filter.status = nil
+                if refresh_fn then refresh_fn() end
+            end,
+            separator = true,
+        },
+    }
+    for _, v in ipairs(statuses) do
+        table.insert(sub_item_table, {
+            text = BookList.getBookStatusString(v):lower(),
+            checked_func = function()
+                return FileChooser.show_filter.status and FileChooser.show_filter.status[v]
+            end,
+            callback = function()
+                FileChooser.show_filter.status = FileChooser.show_filter.status or {}
+                FileChooser.show_filter.status[v] = not FileChooser.show_filter.status[v] or nil
+                local statuses_nb = util.tableSize(FileChooser.show_filter.status)
+                if statuses_nb == 0 or statuses_nb == #statuses then
+                    FileChooser.show_filter.status = nil
+                end
+                if refresh_fn then refresh_fn() end
+            end,
+        })
+    end
+    return {
+        text_func = function()
+            local text
+            if FileChooser.show_filter.status == nil then
+                text = BookList.getBookStatusString("all"):lower()
+            else
+                for _, v in ipairs(statuses) do
+                    if FileChooser.show_filter.status[v] then
+                        local status_string = BookList.getBookStatusString(v):lower()
+                        text = text and text .. ", " .. status_string or status_string
+                    end
+                end
+            end
+            return T(_("Book status: %1"), text)
+        end,
+        sub_item_table = sub_item_table,
+        hold_callback = function(touchmenu_instance)
+            FileChooser.show_filter.status = nil
+            if refresh_fn then refresh_fn() end
+            touchmenu_instance:updateItems()
+        end,
+    }
+end
+
+-- +--------------------------------------------+
+-- | Helper: build display mode radio submenu   |
+-- +--------------------------------------------+
+
+function FolderMemory:_buildDisplayModeMenuTable()
+    local modes = {
+        { _("Mosaic grid (cover view)"), "mosaic" },
+        { _("Detailed list"), "list" },
+        { _("Classic file browser"), "classic" },
+    }
+    local sub_item_table = {}
+    for _, mode in ipairs(modes) do
+        table.insert(sub_item_table, {
+            text = mode[1],
+            checked_func = function()
+                return (_BookInfoManager:getSetting("filemanager_display_mode") or "mosaic") == mode[2]
+            end,
+            radio = true,
+            callback = function()
+                local ui = FileManager.instance
+                if ui and ui.coverbrowser then
+                    ui.coverbrowser:setDisplayMode(mode[2])
+                end
+            end,
+        })
+    end
+    return {
+        text_func = function()
+            local dm = _BookInfoManager:getSetting("filemanager_display_mode") or "mosaic"
+            local names = {
+                mosaic = _("Mosaic grid"),
+                list = _("Detailed list"),
+                classic = _("Classic"),
+            }
+            return T(_("Display mode: %1"), names[dm] or dm)
+        end,
+        sub_item_table = sub_item_table,
+    }
+end
+
+-- ============================================================
+-- Config dialog – full per-folder settings editor
+-- ============================================================
+
+function FolderMemory:_showConfigDialog(path)
+    local TouchMenu = require("ui/widget/touchmenu")
+    local Screen = require("device").screen
+    local menu_items = {}
+
+    -- Helper: refresh FileChooser after changes
+    local function refresh()
+        if self.ui and self.ui.file_chooser then
+            self.ui.file_chooser:refreshPath()
+        end
+    end
+
+    -- Helper: save current state to folder memory (without leaving the dialog)
+    local function saveFolderSettings()
+        local current = Memory.captureCurrentSettings()
+        Memory.saveFolderMemory(path, current)
+    end
+
+    -- Helper: clear folder memory for this path
+    local function clearFolderSettings()
+        Memory.clearFolder(path)
+    end
+
+    -- +----------------------------+
+    -- | 1. Sort by (radio submenu) |
+    -- +----------------------------+
+    local function buildSortBySubmenu()
+        local sub = {}
+        local fc = self.ui.file_chooser
+        for k, v in pairs(fc.collates) do
+            table.insert(sub, {
+                text = v.text,
+                menu_order = v.menu_order or 0,
+                checked_func = function()
+                    local _, id = fc:getCollate()
+                    return k == id
+                end,
+                callback = function()
+                    self.ui:onSetSortBy(k)
+                    refresh()
+                end,
+                radio = true,
+            })
+        end
+        table.sort(sub, function(a, b) return a.menu_order < b.menu_order end)
+        return sub
+    end
+
+    menu_items.sort_by = {
+        text_func = function()
+            local collate = self.ui.file_chooser:getCollate()
+            return T(_("Sort by: %1"), collate.text)
+        end,
+        sub_item_table = buildSortBySubmenu(),
+    }
+
+    -- +--------------------+
+    -- | 2. Reverse sorting |
+    -- +--------------------+
+    menu_items.reverse_sorting = {
+        text = _("Reverse sorting"),
+        checked_func = function()
+            return G_reader_settings:isTrue("reverse_collate")
+        end,
+        callback = function()
+            G_reader_settings:flipNilOrFalse("reverse_collate")
+            refresh()
+        end,
+    }
+
+    -- +--------------------------------+
+    -- | 3. Folders and files mixed     |
+    -- +--------------------------------+
+    menu_items.sort_mixed = {
+        text = _("Folders and files mixed"),
+        enabled_func = function()
+            local collate = self.ui.file_chooser:getCollate()
+            return collate.can_collate_mixed or false
+        end,
+        checked_func = function()
+            local collate = self.ui.file_chooser:getCollate()
+            return collate.can_collate_mixed and G_reader_settings:isTrue("collate_mixed")
+        end,
+        callback = function()
+            G_reader_settings:flipNilOrFalse("collate_mixed")
+            refresh()
+        end,
+    }
+
+    -- +--------------------+
+    -- | 4. Book status     |
+    -- +--------------------+
+    menu_items.book_status = self:_buildBookStatusMenuTable(refresh)
+
+    -- +--------------------+
+    -- | 5. Display mode    |
+    -- +--------------------+
+    if _hasBookInfoManager then
+        menu_items.display_mode = self:_buildDisplayModeMenuTable()
+    end
+
+    -- +-----------------------------------+
+    -- | 6. Items per page (grid / list)   |
+    -- +-----------------------------------+
+    if _hasBookInfoManager then
+        local display_mode = _BookInfoManager:getSetting("filemanager_display_mode") or "mosaic"
+        if display_mode == "mosaic" then
+            -- Mosaic grid: columns × rows
+            menu_items.mosaic_columns_portrait = {
+                text_func = function()
+                    local v = _BookInfoManager:getSetting("nb_cols_portrait") or 3
+                    return T(_("Mosaic columns (portrait): %1"), v)
+                end,
+                callback = function(touchmenu_instance)
+                    local widget = SpinWidget:new{
+                        title_text = _("Mosaic columns (portrait)"),
+                        value = _BookInfoManager:getSetting("nb_cols_portrait") or 3,
+                        value_min = 1,
+                        value_max = 12,
+                        default_value = 3,
+                        keep_shown_on_apply = true,
+                        callback = function(spin)
+                            _BookInfoManager:saveSetting("nb_cols_portrait", spin.value)
+                            refresh()
+                            if touchmenu_instance then touchmenu_instance:updateItems() end
+                        end,
+                    }
+                    UIManager:show(widget)
+                end,
+            }
+            menu_items.mosaic_rows_portrait = {
+                text_func = function()
+                    local v = _BookInfoManager:getSetting("nb_rows_portrait") or 5
+                    return T(_("Mosaic rows (portrait): %1"), v)
+                end,
+                callback = function(touchmenu_instance)
+                    local widget = SpinWidget:new{
+                        title_text = _("Mosaic rows (portrait)"),
+                        value = _BookInfoManager:getSetting("nb_rows_portrait") or 5,
+                        value_min = 1,
+                        value_max = 20,
+                        default_value = 5,
+                        keep_shown_on_apply = true,
+                        callback = function(spin)
+                            _BookInfoManager:saveSetting("nb_rows_portrait", spin.value)
+                            refresh()
+                            if touchmenu_instance then touchmenu_instance:updateItems() end
+                        end,
+                    }
+                    UIManager:show(widget)
+                end,
+            }
+            menu_items.mosaic_columns_landscape = {
+                text_func = function()
+                    local v = _BookInfoManager:getSetting("nb_cols_landscape") or 4
+                    return T(_("Mosaic columns (landscape): %1"), v)
+                end,
+                callback = function(touchmenu_instance)
+                    local widget = SpinWidget:new{
+                        title_text = _("Mosaic columns (landscape)"),
+                        value = _BookInfoManager:getSetting("nb_cols_landscape") or 4,
+                        value_min = 1,
+                        value_max = 12,
+                        default_value = 4,
+                        keep_shown_on_apply = true,
+                        callback = function(spin)
+                            _BookInfoManager:saveSetting("nb_cols_landscape", spin.value)
+                            refresh()
+                            if touchmenu_instance then touchmenu_instance:updateItems() end
+                        end,
+                    }
+                    UIManager:show(widget)
+                end,
+            }
+            menu_items.mosaic_rows_landscape = {
+                text_func = function()
+                    local v = _BookInfoManager:getSetting("nb_rows_landscape") or 3
+                    return T(_("Mosaic rows (landscape): %1"), v)
+                end,
+                callback = function(touchmenu_instance)
+                    local widget = SpinWidget:new{
+                        title_text = _("Mosaic rows (landscape)"),
+                        value = _BookInfoManager:getSetting("nb_rows_landscape") or 3,
+                        value_min = 1,
+                        value_max = 20,
+                        default_value = 3,
+                        keep_shown_on_apply = true,
+                        callback = function(spin)
+                            _BookInfoManager:saveSetting("nb_rows_landscape", spin.value)
+                            refresh()
+                            if touchmenu_instance then touchmenu_instance:updateItems() end
+                        end,
+                    }
+                    UIManager:show(widget)
+                end,
+            }
+        else
+            -- List / classic display: files per page
+            menu_items.files_per_page = {
+                text_func = function()
+                    local v = _BookInfoManager:getSetting("files_per_page") or 14
+                    return T(_("Files per page: %1"), v)
+                end,
+                callback = function(touchmenu_instance)
+                    local widget = SpinWidget:new{
+                        title_text = _("Files per page"),
+                        value = _BookInfoManager:getSetting("files_per_page") or 14,
+                        value_min = 2,
+                        value_max = 50,
+                        default_value = 14,
+                        keep_shown_on_apply = true,
+                        callback = function(spin)
+                            _BookInfoManager:saveSetting("files_per_page", spin.value)
+                            refresh()
+                            if touchmenu_instance then touchmenu_instance:updateItems() end
+                        end,
+                    }
+                    UIManager:show(widget)
+                end,
+            }
+        end
+    end
+
+    -- +-----------------------------------+
+    -- | 7. Save / Clear buttons           |
+    -- +-----------------------------------+
+    menu_items.save_settings = {
+        text = _("Save current settings for this folder"),
+        separator = true,
+        callback = function()
+            saveFolderSettings()
+            UIManager:show(InfoMessage:new{
+                text = _("Settings saved for this folder."),
+            })
+        end,
+    }
+
+    menu_items.clear_settings = {
+        text = _("Clear saved settings for this folder"),
+        enabled_func = function()
+            return Memory.hasOwnSettings(path)
+        end,
+        callback = function()
+            UIManager:show(ConfirmBox:new{
+                text = _("Clear saved settings for this folder? Settings will revert to default or global values."),
+                ok_text = _("Clear"),
+                ok_callback = function()
+                    clearFolderSettings()
+                    refresh()
+                    UIManager:show(InfoMessage:new{
+                        text = _("Folder settings cleared."),
+                    })
+                end,
+            })
+        end,
+    }
+
+    menu_items.close_dialog = {
+        text = _("Close"),
+        separator = true,
+        keep_menu_open = false,
+        callback = function(touchmenu_instance)
+            touchmenu_instance:closeMenu()
+        end,
+    }
+
+    -- Build the sub_item_table from our menu_items, in order
+    local order = {
+        "sort_by",
+        "reverse_sorting",
+        "sort_mixed",
+        "book_status",
+        "display_mode",
+        "mosaic_columns_portrait",
+        "mosaic_rows_portrait",
+        "mosaic_columns_landscape",
+        "mosaic_rows_landscape",
+        "files_per_page",
+        "save_settings",
+        "clear_settings",
+        "close_dialog",
+    }
+    local sub_item_table = {}
+    for _, id in ipairs(order) do
+        if menu_items[id] then
+            table.insert(sub_item_table, menu_items[id])
+        end
+    end
+
+    -- TouchMenu expects each element of tab_item_table to be a numerically-indexed
+    -- array of menu items (with an optional .icon field for the tab bar).
+    sub_item_table.icon = "appbar.settings"
+    local menu_widget = TouchMenu:new{
+        width = Screen:getWidth(),
+        height = Screen:getHeight(),
+        tab_item_table = { sub_item_table },
+        close_callback = function()
+            -- Refresh after closing
+            refresh()
+        end,
+    }
+
+    UIManager:show(menu_widget)
+end
+
 -- ============================================================
 -- Menu
 -- ============================================================
@@ -195,24 +638,17 @@ function FolderMemory:addToMainMenu(menu_items)
         sub_item_table = {},
     }
 
-    -- Current folder path (info only, not clickable, dimmed)
+    -- Config this folder
     table.insert(menu_items.folder_memory.sub_item_table, {
-        text_func = function()
-            if not self.ui.file_chooser or not self.ui.file_chooser.path then
-                return _("(none)")
-            end
-            local p = self.ui.file_chooser.path
-            -- Shorten for display
-            if #p > 60 then
-                p = "..." .. p:sub(-57)
-            end
-            local has_own = Memory.hasOwnSettings(self.ui.file_chooser.path)
-            local status = has_own and _("✓") or _("✗")
-            return T("%1  %2", p, status)
+        text = _("Configure this folder"),
+        enabled_func = function()
+            return self.ui.file_chooser and self.ui.file_chooser.path ~= nil
         end,
-        dim = true,
-        enabled_func = function() return false end,
         separator = true,
+        callback = function()
+            if not self.ui.file_chooser or not self.ui.file_chooser.path then return end
+            self:_showConfigDialog(self.ui.file_chooser.path)
+        end,
     })
 
     -- Save / Update settings for this folder
