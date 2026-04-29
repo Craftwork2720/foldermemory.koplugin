@@ -432,6 +432,7 @@ function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
         local fc = self.ui.file_chooser
         -- Mosaic grid: DoubleSpinWidget (columns × rows in one dialog)
         menu_items.mosaic_portrait_grid = {
+            keep_menu_open = true,
             text_func = function()
                 local cols = fc.nb_cols_portrait or _BookInfoManager:getSetting("nb_cols_portrait") or 3
                 local rows = fc.nb_rows_portrait or _BookInfoManager:getSetting("nb_rows_portrait") or 3
@@ -482,6 +483,7 @@ function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
             end,
         }
         menu_items.mosaic_landscape_grid = {
+            keep_menu_open = true,
             text_func = function()
                 local cols = fc.nb_cols_landscape or _BookInfoManager:getSetting("nb_cols_landscape") or 4
                 local rows = fc.nb_rows_landscape or _BookInfoManager:getSetting("nb_rows_landscape") or 2
@@ -534,6 +536,7 @@ function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
         }
         -- Files per page (list mode)
         menu_items.files_per_page = {
+            keep_menu_open = true,
             text_func = function()
                 local v = fc.files_per_page or _BookInfoManager:getSetting("files_per_page") or 10
                 return T(_("Items per page in portrait list mode: %1"), v)
