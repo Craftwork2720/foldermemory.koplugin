@@ -430,150 +430,145 @@ function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
     -- +-----------------------------------+
     if _hasBookInfoManager then
         local fc = self.ui.file_chooser
-        local display_mode = _BookInfoManager:getSetting("filemanager_display_mode")
-        local mode_type = display_mode and display_mode:match("^(%a+)_") or nil
-        if mode_type == "mosaic" then
-            -- Mosaic grid: DoubleSpinWidget (columns × rows in one dialog)
-            menu_items.mosaic_portrait_grid = {
-                text_func = function()
-                    local cols = fc.nb_cols_portrait or _BookInfoManager:getSetting("nb_cols_portrait") or 3
-                    local rows = fc.nb_rows_portrait or _BookInfoManager:getSetting("nb_rows_portrait") or 3
-                    return T(_("Items per page in portrait mosaic mode: %1 × %2"), cols, rows)
-                end,
-                callback = function(touchmenu_instance)
-                    local nb_cols = fc.nb_cols_portrait or _BookInfoManager:getSetting("nb_cols_portrait") or 3
-                    local nb_rows = fc.nb_rows_portrait or _BookInfoManager:getSetting("nb_rows_portrait") or 3
-                    local widget = DoubleSpinWidget:new{
-                        title_text = _("Portrait mosaic mode"),
-                        width_factor = 0.6,
-                        left_text = _("Columns"),
-                        left_value = nb_cols,
-                        left_min = 2,
-                        left_max = 8,
-                        left_default = 3,
-                        left_precision = "%01d",
-                        right_text = _("Rows"),
-                        right_value = nb_rows,
-                        right_min = 2,
-                        right_max = 8,
-                        right_default = 3,
-                        right_precision = "%01d",
-                        keep_shown_on_apply = true,
-                        callback = function(left_value, right_value)
-                            fc.nb_cols_portrait = left_value
-                            fc.nb_rows_portrait = right_value
+        -- Mosaic grid: DoubleSpinWidget (columns × rows in one dialog)
+        menu_items.mosaic_portrait_grid = {
+            text_func = function()
+                local cols = fc.nb_cols_portrait or _BookInfoManager:getSetting("nb_cols_portrait") or 3
+                local rows = fc.nb_rows_portrait or _BookInfoManager:getSetting("nb_rows_portrait") or 3
+                return T(_("Items per page in portrait mosaic mode: %1 × %2"), cols, rows)
+            end,
+            callback = function(touchmenu_instance)
+                local nb_cols = fc.nb_cols_portrait or _BookInfoManager:getSetting("nb_cols_portrait") or 3
+                local nb_rows = fc.nb_rows_portrait or _BookInfoManager:getSetting("nb_rows_portrait") or 3
+                local widget = DoubleSpinWidget:new{
+                    title_text = _("Portrait mosaic mode"),
+                    width_factor = 0.6,
+                    left_text = _("Columns"),
+                    left_value = nb_cols,
+                    left_min = 2,
+                    left_max = 8,
+                    left_default = 3,
+                    left_precision = "%01d",
+                    right_text = _("Rows"),
+                    right_value = nb_rows,
+                    right_min = 2,
+                    right_max = 8,
+                    right_default = 3,
+                    right_precision = "%01d",
+                    keep_shown_on_apply = true,
+                    callback = function(left_value, right_value)
+                        fc.nb_cols_portrait = left_value
+                        fc.nb_rows_portrait = right_value
+                        if fc.display_mode_type == "mosaic" and fc.portrait_mode then
+                            fc.no_refresh_covers = true
+                            fc:updateItems()
+                        end
+                        if touchmenu_instance then touchmenu_instance:updateItems() end
+                    end,
+                    close_callback = function()
+                        if fc.nb_cols_portrait ~= nb_cols or fc.nb_rows_portrait ~= nb_rows then
+                            _BookInfoManager:saveSetting("nb_cols_portrait", fc.nb_cols_portrait)
+                            _BookInfoManager:saveSetting("nb_rows_portrait", fc.nb_rows_portrait)
+                            FileChooser.nb_cols_portrait = fc.nb_cols_portrait
+                            FileChooser.nb_rows_portrait = fc.nb_rows_portrait
                             if fc.display_mode_type == "mosaic" and fc.portrait_mode then
-                                fc.no_refresh_covers = true
+                                fc.no_refresh_covers = nil
                                 fc:updateItems()
                             end
-                            if touchmenu_instance then touchmenu_instance:updateItems() end
-                        end,
-                        close_callback = function()
-                            if fc.nb_cols_portrait ~= nb_cols or fc.nb_rows_portrait ~= nb_rows then
-                                _BookInfoManager:saveSetting("nb_cols_portrait", fc.nb_cols_portrait)
-                                _BookInfoManager:saveSetting("nb_rows_portrait", fc.nb_rows_portrait)
-                                FileChooser.nb_cols_portrait = fc.nb_cols_portrait
-                                FileChooser.nb_rows_portrait = fc.nb_rows_portrait
-                                if fc.display_mode_type == "mosaic" and fc.portrait_mode then
-                                    fc.no_refresh_covers = nil
-                                    fc:updateItems()
-                                end
-                            end
-                        end,
-                    }
-                    UIManager:show(widget)
-                end,
-            }
-            menu_items.mosaic_landscape_grid = {
-                text_func = function()
-                    local cols = fc.nb_cols_landscape or _BookInfoManager:getSetting("nb_cols_landscape") or 4
-                    local rows = fc.nb_rows_landscape or _BookInfoManager:getSetting("nb_rows_landscape") or 2
-                    return T(_("Items per page in landscape mosaic mode: %1 × %2"), cols, rows)
-                end,
-                callback = function(touchmenu_instance)
-                    local nb_cols = fc.nb_cols_landscape or _BookInfoManager:getSetting("nb_cols_landscape") or 4
-                    local nb_rows = fc.nb_rows_landscape or _BookInfoManager:getSetting("nb_rows_landscape") or 2
-                    local widget = DoubleSpinWidget:new{
-                        title_text = _("Landscape mosaic mode"),
-                        width_factor = 0.6,
-                        left_text = _("Columns"),
-                        left_value = nb_cols,
-                        left_min = 2,
-                        left_max = 8,
-                        left_default = 4,
-                        left_precision = "%01d",
-                        right_text = _("Rows"),
-                        right_value = nb_rows,
-                        right_min = 2,
-                        right_max = 8,
-                        right_default = 2,
-                        right_precision = "%01d",
-                        keep_shown_on_apply = true,
-                        callback = function(left_value, right_value)
-                            fc.nb_cols_landscape = left_value
-                            fc.nb_rows_landscape = right_value
+                        end
+                    end,
+                }
+                UIManager:show(widget)
+            end,
+        }
+        menu_items.mosaic_landscape_grid = {
+            text_func = function()
+                local cols = fc.nb_cols_landscape or _BookInfoManager:getSetting("nb_cols_landscape") or 4
+                local rows = fc.nb_rows_landscape or _BookInfoManager:getSetting("nb_rows_landscape") or 2
+                return T(_("Items per page in landscape mosaic mode: %1 × %2"), cols, rows)
+            end,
+            callback = function(touchmenu_instance)
+                local nb_cols = fc.nb_cols_landscape or _BookInfoManager:getSetting("nb_cols_landscape") or 4
+                local nb_rows = fc.nb_rows_landscape or _BookInfoManager:getSetting("nb_rows_landscape") or 2
+                local widget = DoubleSpinWidget:new{
+                    title_text = _("Landscape mosaic mode"),
+                    width_factor = 0.6,
+                    left_text = _("Columns"),
+                    left_value = nb_cols,
+                    left_min = 2,
+                    left_max = 8,
+                    left_default = 4,
+                    left_precision = "%01d",
+                    right_text = _("Rows"),
+                    right_value = nb_rows,
+                    right_min = 2,
+                    right_max = 8,
+                    right_default = 2,
+                    right_precision = "%01d",
+                    keep_shown_on_apply = true,
+                    callback = function(left_value, right_value)
+                        fc.nb_cols_landscape = left_value
+                        fc.nb_rows_landscape = right_value
+                        if fc.display_mode_type == "mosaic" and not fc.portrait_mode then
+                            fc.no_refresh_covers = true
+                            fc:updateItems()
+                        end
+                        if touchmenu_instance then touchmenu_instance:updateItems() end
+                    end,
+                    close_callback = function()
+                        if fc.nb_cols_landscape ~= nb_cols or fc.nb_rows_landscape ~= nb_rows then
+                            _BookInfoManager:saveSetting("nb_cols_landscape", fc.nb_cols_landscape)
+                            _BookInfoManager:saveSetting("nb_rows_landscape", fc.nb_rows_landscape)
+                            FileChooser.nb_cols_landscape = fc.nb_cols_landscape
+                            FileChooser.nb_rows_landscape = fc.nb_rows_landscape
                             if fc.display_mode_type == "mosaic" and not fc.portrait_mode then
-                                fc.no_refresh_covers = true
+                                fc.no_refresh_covers = nil
                                 fc:updateItems()
                             end
-                            if touchmenu_instance then touchmenu_instance:updateItems() end
-                        end,
-                        close_callback = function()
-                            if fc.nb_cols_landscape ~= nb_cols or fc.nb_rows_landscape ~= nb_rows then
-                                _BookInfoManager:saveSetting("nb_cols_landscape", fc.nb_cols_landscape)
-                                _BookInfoManager:saveSetting("nb_rows_landscape", fc.nb_rows_landscape)
-                                FileChooser.nb_cols_landscape = fc.nb_cols_landscape
-                                FileChooser.nb_rows_landscape = fc.nb_rows_landscape
-                                if fc.display_mode_type == "mosaic" and not fc.portrait_mode then
-                                    fc.no_refresh_covers = nil
-                                    fc:updateItems()
-                                end
-                            end
-                        end,
-                    }
-                    UIManager:show(widget)
-                end,
-                separator = true,
-            }
-        else
-            -- List / classic display: files per page
-            menu_items.files_per_page = {
-                text_func = function()
-                    local v = fc.files_per_page or _BookInfoManager:getSetting("files_per_page") or 10
-                    return T(_("Items per page in portrait list mode: %1"), v)
-                end,
-                callback = function(touchmenu_instance)
-                    local files_per_page_val = fc.files_per_page or _BookInfoManager:getSetting("files_per_page") or 10
-                    local widget = SpinWidget:new{
-                        title_text = _("Portrait list mode"),
-                        value = files_per_page_val,
-                        value_min = 4,
-                        value_max = 20,
-                        default_value = 10,
-                        keep_shown_on_apply = true,
-                        callback = function(spin)
-                            fc.files_per_page = spin.value
+                        end
+                    end,
+                }
+                UIManager:show(widget)
+            end,
+            separator = true,
+        }
+        -- Files per page (list mode)
+        menu_items.files_per_page = {
+            text_func = function()
+                local v = fc.files_per_page or _BookInfoManager:getSetting("files_per_page") or 10
+                return T(_("Items per page in portrait list mode: %1"), v)
+            end,
+            callback = function(touchmenu_instance)
+                local files_per_page_val = fc.files_per_page or _BookInfoManager:getSetting("files_per_page") or 10
+                local widget = SpinWidget:new{
+                    title_text = _("Portrait list mode"),
+                    value = files_per_page_val,
+                    value_min = 4,
+                    value_max = 20,
+                    default_value = 10,
+                    keep_shown_on_apply = true,
+                    callback = function(spin)
+                        fc.files_per_page = spin.value
+                        if fc.display_mode_type == "list" then
+                            fc.no_refresh_covers = true
+                            fc:updateItems()
+                        end
+                        if touchmenu_instance then touchmenu_instance:updateItems() end
+                    end,
+                    close_callback = function()
+                        if fc.files_per_page ~= files_per_page_val then
+                            _BookInfoManager:saveSetting("files_per_page", fc.files_per_page)
+                            FileChooser.files_per_page = fc.files_per_page
                             if fc.display_mode_type == "list" then
-                                fc.no_refresh_covers = true
+                                fc.no_refresh_covers = nil
                                 fc:updateItems()
                             end
-                            if touchmenu_instance then touchmenu_instance:updateItems() end
-                        end,
-                        close_callback = function()
-                            if fc.files_per_page ~= files_per_page_val then
-                                _BookInfoManager:saveSetting("files_per_page", fc.files_per_page)
-                                FileChooser.files_per_page = fc.files_per_page
-                                if fc.display_mode_type == "list" then
-                                    fc.no_refresh_covers = nil
-                                    fc:updateItems()
-                                end
-                            end
-                        end,
-                    }
-                    UIManager:show(widget)
-                end,
-            }
-        end
+                        end
+                    end,
+                }
+                UIManager:show(widget)
+            end,
+        }
     end
 
     -- +-----------------------------------+
