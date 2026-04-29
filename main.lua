@@ -314,12 +314,10 @@ function FolderMemory:_buildDisplayModeMenuTable()
 end
 
 -- ============================================================
--- Config dialog – full per-folder settings editor
+-- Config submenu builder – returns a table of menu items
 -- ============================================================
 
-function FolderMemory:_showConfigDialog(path)
-    local TouchMenu = require("ui/widget/touchmenu")
-    local Screen = require("device").screen
+function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
     local menu_items = {}
 
     -- Helper: refresh FileChooser after changes
@@ -329,7 +327,7 @@ function FolderMemory:_showConfigDialog(path)
         end
     end
 
-    -- Helper: save current state to folder memory (without leaving the dialog)
+    -- Helper: save current state to folder memory
     local function saveFolderSettings()
         local current = Memory.captureCurrentSettings()
         Memory.saveFolderMemory(path, current)
@@ -574,14 +572,18 @@ function FolderMemory:_showConfigDialog(path)
         end,
     }
 
-    menu_items.close_dialog = {
-        text = _("Close"),
-        separator = true,
-        keep_menu_open = false,
-        callback = function(touchmenu_instance)
-            touchmenu_instance:closeMenu()
-        end,
-    }
+    -- "Close" item only meaningful in standalone dialog mode,
+    -- not when used as a nested submenu (user simply goes back).
+    if submenu_mode then
+        menu_items.close_dialog = {
+            text = _("Close"),
+            separator = true,
+            keep_menu_open = false,
+            callback = function(touchmenu_instance)
+                touchmenu_instance:closeMenu()
+            end,
+        }
+    end
 
     -- Build the sub_item_table from our menu_items, in order
     local order = {
@@ -606,16 +608,28 @@ function FolderMemory:_showConfigDialog(path)
         end
     end
 
-    -- TouchMenu expects each element of tab_item_table to be a numerically-indexed
-    -- array of menu items (with an optional .icon field for the tab bar).
+    return sub_item_table
+end
+
+-- ============================================================
+-- Standalone config dialog (for dispatcher / gesture use)
+-- ============================================================
+
+function FolderMemory:_showConfigDialog(path)
+    local TouchMenu = require("ui/widget/touchmenu")
+    local Screen = require("device").screen
+
+    local sub_item_table = self:_buildConfigSubmenu(path, "dialog")
     sub_item_table.icon = "appbar.settings"
+
     local menu_widget = TouchMenu:new{
         width = Screen:getWidth(),
         height = Screen:getHeight(),
         tab_item_table = { sub_item_table },
         close_callback = function()
-            -- Refresh after closing
-            refresh()
+            if self.ui and self.ui.file_chooser then
+                self.ui.file_chooser:refreshPath()
+            end
         end,
     }
 
@@ -638,17 +652,14 @@ function FolderMemory:addToMainMenu(menu_items)
         sub_item_table = {},
     }
 
-    -- Config this folder
+    -- Config this folder (nested submenu)
     table.insert(menu_items.folder_memory.sub_item_table, {
         text = _("Configure this folder"),
         enabled_func = function()
             return self.ui.file_chooser and self.ui.file_chooser.path ~= nil
         end,
         separator = true,
-        callback = function()
-            if not self.ui.file_chooser or not self.ui.file_chooser.path then return end
-            self:_showConfigDialog(self.ui.file_chooser.path)
-        end,
+        sub_item_table = self:_buildConfigSubmenu(self.ui.file_chooser.path),
     })
 
     -- Save / Update settings for this folder
