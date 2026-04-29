@@ -164,12 +164,6 @@ function FolderMemory:onDispatcherRegisterActions()
         title = _("FolderMemory: clear settings for current folder"),
         filemanager = true,
     })
-    Dispatcher:registerAction("config_folder_memory", {
-        category = "none",
-        event = "ConfigFolderMemory",
-        title = _("FolderMemory: configure this folder"),
-        filemanager = true,
-    })
 end
 
 function FolderMemory:onSaveFolderMemory()
@@ -199,18 +193,6 @@ function FolderMemory:onClearFolderMemory()
     UIManager:show(InfoMessage:new{
         text = _("Folder settings cleared."),
     })
-end
-
-function FolderMemory:onConfigFolderMemory()
-    local fc = self.ui.file_chooser
-    local path = fc and fc.path
-    if not path then
-        UIManager:show(InfoMessage:new{
-            text = _("This action is only available in File browser."),
-        })
-        return
-    end
-    self:_showConfigDialog(path)
 end
 
 -- +--------------------------------------------+
@@ -329,7 +311,7 @@ end
 -- Config submenu builder – returns a table of menu items
 -- ============================================================
 
-function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
+function FolderMemory:_buildConfigSubmenu(path)
     local menu_items = {}
 
     -- Helper: refresh FileChooser after changes
@@ -638,29 +620,6 @@ function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
     end
 
     return sub_item_table
-end
-
--- ============================================================
--- Standalone config dialog (for dispatcher / gesture use)
--- ============================================================
-
-function FolderMemory:_showConfigDialog(path)
-    local Menu = require("ui/widget/menu")
-    local UIManager = require("ui/uimanager")
-
-    local sub_item_table = self:_buildConfigSubmenu(path)
-
-    local menu = Menu:new{
-        title = _("Configure folder"),
-        item_table = sub_item_table,
-        covers_fullscreen = true,
-        close_callback = function()
-            if self.ui and self.ui.file_chooser then
-                self.ui.file_chooser:refreshPath()
-            end
-        end,
-    }
-    UIManager:show(menu)
 end
 
 -- ============================================================
