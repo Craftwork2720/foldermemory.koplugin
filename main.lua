@@ -617,19 +617,6 @@ function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
         end,
     }
 
-    -- "Close" item only meaningful in standalone dialog mode,
-    -- not when used as a nested submenu (user simply goes back).
-    if submenu_mode then
-        menu_items.close_dialog = {
-            text = _("Close"),
-            separator = true,
-            keep_menu_open = false,
-            callback = function(touchmenu_instance)
-                touchmenu_instance:closeMenu()
-            end,
-        }
-    end
-
     -- Build the sub_item_table from our menu_items, in order
     local order = {
         "sort_by",
@@ -642,7 +629,6 @@ function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
         "files_per_page",
         "save_settings",
         "clear_settings",
-        "close_dialog",
     }
     local sub_item_table = {}
     for _, id in ipairs(order) do
@@ -660,24 +646,21 @@ end
 
 function FolderMemory:_showConfigDialog(path)
     local Menu = require("ui/widget/menu")
-    local Screen = require("device").screen
+    local UIManager = require("ui/uimanager")
 
-    local sub_item_table = self:_buildConfigSubmenu(path, "dialog")
+    local sub_item_table = self:_buildConfigSubmenu(path)
 
-    local menu_widget = Menu:new{
-        width = Screen:getWidth(),
-        height = Screen:getHeight(),
+    local menu = Menu:new{
         title = _("Configure folder"),
         item_table = sub_item_table,
-        is_popout = true,
+        covers_fullscreen = true,
         close_callback = function()
             if self.ui and self.ui.file_chooser then
                 self.ui.file_chooser:refreshPath()
             end
         end,
     }
-
-    UIManager:show(menu_widget)
+    UIManager:show(menu)
 end
 
 -- ============================================================
