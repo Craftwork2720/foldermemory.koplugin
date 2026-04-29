@@ -217,7 +217,7 @@ end
 -- | Helper: build book status filter submenu   |
 -- +--------------------------------------------+
 
-function FolderMemory:_buildBookStatusMenuTable(refresh_fn)
+function FolderMemory:_buildBookStatusMenuTable(refresh_fn, save_fn)
     local statuses = { "new", "reading", "abandoned", "complete" }
     local sub_item_table = {
         {
@@ -226,10 +226,11 @@ function FolderMemory:_buildBookStatusMenuTable(refresh_fn)
                 return FileChooser.show_filter.status == nil
             end,
             radio = true,
-            callback = function()
-                FileChooser.show_filter.status = nil
-                if refresh_fn then refresh_fn() end
-            end,
+                callback = function()
+                    FileChooser.show_filter.status = nil
+                    if save_fn then save_fn() end
+                    if refresh_fn then refresh_fn() end
+                end,
             separator = true,
         },
     }
@@ -239,15 +240,16 @@ function FolderMemory:_buildBookStatusMenuTable(refresh_fn)
             checked_func = function()
                 return FileChooser.show_filter.status and FileChooser.show_filter.status[v]
             end,
-            callback = function()
-                FileChooser.show_filter.status = FileChooser.show_filter.status or {}
-                FileChooser.show_filter.status[v] = not FileChooser.show_filter.status[v] or nil
-                local statuses_nb = util.tableSize(FileChooser.show_filter.status)
-                if statuses_nb == 0 or statuses_nb == #statuses then
-                    FileChooser.show_filter.status = nil
-                end
-                if refresh_fn then refresh_fn() end
-            end,
+                callback = function()
+                    FileChooser.show_filter.status = FileChooser.show_filter.status or {}
+                    FileChooser.show_filter.status[v] = not FileChooser.show_filter.status[v] or nil
+                    local statuses_nb = util.tableSize(FileChooser.show_filter.status)
+                    if statuses_nb == 0 or statuses_nb == #statuses then
+                        FileChooser.show_filter.status = nil
+                    end
+                    if save_fn then save_fn() end
+                    if refresh_fn then refresh_fn() end
+                end,
         })
     end
     return {
@@ -278,7 +280,7 @@ end
 -- | Helper: build display mode radio submenu   |
 -- +--------------------------------------------+
 
-function FolderMemory:_buildDisplayModeMenuTable()
+function FolderMemory:_buildDisplayModeMenuTable(save_fn)
     local modes = {
         { _("Classic (filename only)"), nil },
         { _("Mosaic with cover images"), "mosaic_image" },
@@ -303,6 +305,7 @@ function FolderMemory:_buildDisplayModeMenuTable()
                 if ui and ui.coverbrowser then
                     ui.coverbrowser:setDisplayMode(mode_key)
                 end
+                if save_fn then save_fn() end
             end,
         })
     end
@@ -363,6 +366,7 @@ function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
                 end,
                 callback = function()
                     self.ui:onSetSortBy(k)
+                    saveFolderSettings()
                     refresh()
                 end,
                 radio = true,
@@ -390,6 +394,7 @@ function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
         end,
         callback = function()
             G_reader_settings:flipNilOrFalse("reverse_collate")
+            saveFolderSettings()
             refresh()
         end,
     }
@@ -409,6 +414,7 @@ function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
         end,
         callback = function()
             G_reader_settings:flipNilOrFalse("collate_mixed")
+            saveFolderSettings()
             refresh()
         end,
     }
@@ -416,13 +422,13 @@ function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
     -- +--------------------+
     -- | 4. Book status     |
     -- +--------------------+
-    menu_items.book_status = self:_buildBookStatusMenuTable(refresh)
+    menu_items.book_status = self:_buildBookStatusMenuTable(refresh, saveFolderSettings)
 
     -- +--------------------+
     -- | 5. Display mode    |
     -- +--------------------+
     if _hasBookInfoManager then
-        menu_items.display_mode = self:_buildDisplayModeMenuTable()
+        menu_items.display_mode = self:_buildDisplayModeMenuTable(saveFolderSettings)
     end
 
     -- +-----------------------------------+
@@ -472,6 +478,7 @@ function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
                             _BookInfoManager:saveSetting("nb_rows_portrait", fc.nb_rows_portrait)
                             FileChooser.nb_cols_portrait = fc.nb_cols_portrait
                             FileChooser.nb_rows_portrait = fc.nb_rows_portrait
+                            saveFolderSettings()
                             if fc.display_mode_type == "mosaic" and fc.portrait_mode then
                                 fc.no_refresh_covers = nil
                                 fc:updateItems()
@@ -523,6 +530,7 @@ function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
                             _BookInfoManager:saveSetting("nb_rows_landscape", fc.nb_rows_landscape)
                             FileChooser.nb_cols_landscape = fc.nb_cols_landscape
                             FileChooser.nb_rows_landscape = fc.nb_rows_landscape
+                            saveFolderSettings()
                             if fc.display_mode_type == "mosaic" and not fc.portrait_mode then
                                 fc.no_refresh_covers = nil
                                 fc:updateItems()
@@ -562,6 +570,7 @@ function FolderMemory:_buildConfigSubmenu(path, submenu_mode)
                         if fc.files_per_page ~= files_per_page_val then
                             _BookInfoManager:saveSetting("files_per_page", fc.files_per_page)
                             FileChooser.files_per_page = fc.files_per_page
+                            saveFolderSettings()
                             if fc.display_mode_type == "list" then
                                 fc.no_refresh_covers = nil
                                 fc:updateItems()
