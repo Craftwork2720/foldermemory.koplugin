@@ -659,16 +659,17 @@ end
 -- ============================================================
 
 function FolderMemory:_showConfigDialog(path)
-    local TouchMenu = require("ui/widget/touchmenu")
+    local Menu = require("ui/widget/menu")
     local Screen = require("device").screen
 
     local sub_item_table = self:_buildConfigSubmenu(path, "dialog")
-    sub_item_table.icon = "appbar.settings"
 
-    local menu_widget = TouchMenu:new{
+    local menu_widget = Menu:new{
         width = Screen:getWidth(),
         height = Screen:getHeight(),
-        tab_item_table = { sub_item_table },
+        title = _("Configure folder"),
+        item_table = sub_item_table,
+        is_popout = true,
         close_callback = function()
             if self.ui and self.ui.file_chooser then
                 self.ui.file_chooser:refreshPath()
