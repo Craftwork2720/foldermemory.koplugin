@@ -323,13 +323,17 @@ function FolderMemory:_buildConfigSubmenu(path)
 
     -- Helper: save current state to folder memory
     local function saveFolderSettings()
+        local live_path = self.ui.file_chooser and self.ui.file_chooser.path
+        if not live_path then return end
         local current = Memory.captureCurrentSettings()
-        Memory.saveFolderMemory(path, current)
+        Memory.saveFolderMemory(live_path, current)
     end
 
     -- Helper: clear folder memory for this path
     local function clearFolderSettings()
-        Memory.clearFolder(path)
+        local live_path = self.ui.file_chooser and self.ui.file_chooser.path
+        if not live_path then return end
+        Memory.clearFolder(live_path)
     end
 
     -- +----------------------------+
@@ -582,7 +586,8 @@ function FolderMemory:_buildConfigSubmenu(path)
     menu_items.clear_settings = {
         text = _("Clear saved settings for this folder"),
         enabled_func = function()
-            return Memory.hasOwnSettings(path)
+            local live_path = self.ui.file_chooser and self.ui.file_chooser.path
+            return live_path and Memory.hasOwnSettings(live_path)
         end,
         callback = function()
             UIManager:show(ConfirmBox:new{
