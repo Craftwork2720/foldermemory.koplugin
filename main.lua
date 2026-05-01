@@ -1177,6 +1177,11 @@ function FolderMemory:_buildConfigSubmenu(path)
                             fc.no_refresh_covers = true
                             fc:updateItems()
                         end
+                        _BookInfoManager:saveSetting("nb_cols_portrait", left_value)
+                        _BookInfoManager:saveSetting("nb_rows_portrait", right_value)
+                        FileChooser.nb_cols_portrait = left_value
+                        FileChooser.nb_rows_portrait = right_value
+                        saveFolderSettings()
                         if touchmenu_instance then touchmenu_instance:updateItems() end
                     end,
                     close_callback = function()
@@ -1229,6 +1234,11 @@ function FolderMemory:_buildConfigSubmenu(path)
                             fc.no_refresh_covers = true
                             fc:updateItems()
                         end
+                        _BookInfoManager:saveSetting("nb_cols_landscape", left_value)
+                        _BookInfoManager:saveSetting("nb_rows_landscape", right_value)
+                        FileChooser.nb_cols_landscape = left_value
+                        FileChooser.nb_rows_landscape = right_value
+                        saveFolderSettings()
                         if touchmenu_instance then touchmenu_instance:updateItems() end
                     end,
                     close_callback = function()
@@ -1271,6 +1281,9 @@ function FolderMemory:_buildConfigSubmenu(path)
                             fc.no_refresh_covers = true
                             fc:updateItems()
                         end
+                        _BookInfoManager:saveSetting("files_per_page", spin.value)
+                        FileChooser.files_per_page = spin.value
+                        saveFolderSettings()
                         if touchmenu_instance then touchmenu_instance:updateItems() end
                     end,
                     close_callback = function()
