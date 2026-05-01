@@ -85,6 +85,18 @@ local function _getParentPath(path)
     return nil
 end
 
+--- Check if we are currently in a virtual view (History, Favorites, Collections)
+--- where there is no real folder path and only grid/layout settings from __default__
+--- should be used.
+function Memory._isVirtualView()
+    local fm = FileManager.instance
+    if not fm then return false end
+    if fm.history and fm.history.booklist_menu then return true end
+    if fm.collections and fm.collections.booklist_menu then return true end
+    if fm.collections and fm.collections.coll_list then return true end
+    return false
+end
+
 --- Read saved memory for a given path.
 --- Returns nil if no entry exists (caller decides fallback logic).
 --- Inheritance chain:
@@ -92,9 +104,20 @@ end
 ---   2. Nearest ancestor with saved settings (parent, grandparent, …)
 ---   3. __default__ template
 ---   4. nil (global defaults)
+---
+--- Virtual views (History, Favorites, Collections) always use __default__ only.
 function Memory.getFolderMemory(path)
     if not _settings then
         Memory.init()
+    end
+
+    -- Virtual views (History, Favorites, Collections) always use __default__
+    if Memory._isVirtualView() then
+        local def = _settings:readSetting(DEFAULT_KEY)
+        if type(def) == "table" and next(def) ~= nil then
+            return def
+        end
+        return nil
     end
 
     -- 1. Own settings
@@ -244,6 +267,16 @@ function Memory.captureCurrentSettings()
     return mem
 end
 
+--- Apply __default__ template memory (used when entering virtual views
+--- like History, Favorites, Collections – no real folder path available).
+function Memory.applyDefaultMemory()
+    if not _settings then Memory.init() end
+    local def = _settings:readSetting(DEFAULT_KEY)
+    if type(def) == "table" and next(def) ~= nil then
+        Memory.applyFolderMemory(def)
+    end
+end
+
 --- Apply saved memory to the current state (global settings + instance)
 function Memory.applyFolderMemory(mem)
     if not mem then return end
@@ -282,8 +315,8 @@ function Memory.applyFolderMemory(mem)
         FileChooser.show_filter = {}
     end
 
-    -- Display mode
-    if mem.display_mode ~= nil then
+    -- Display mode (skip in virtual views – History/Favorites/Collections)
+    if mem.display_mode ~= nil and not Memory._isVirtualView() then
         local ui = FileManager.instance
         if ui and ui.coverbrowser then
             ui.coverbrowser:setDisplayMode(mem.display_mode)

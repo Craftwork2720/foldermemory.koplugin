@@ -91,6 +91,8 @@ function FolderMemory:_setupHooks()
     -- ============================================================
     local function autoSave()
         if _applying then return end
+        -- Never auto-save in virtual views (History, Favorites, Collections)
+        if Memory._isVirtualView() then return end
         local fm = FileManager.instance
         if not fm or not fm.file_chooser then return end
         local path = fm.file_chooser.path
@@ -301,6 +303,52 @@ function FolderMemory:_setupHooks()
             end
         end
         orig_refreshPath2(self)
+    end
+
+    -- ============================================================
+    -- Hook 6: Virtual views (History, Favorites, Collections)
+    --
+    -- When entering these views, force __default__ template settings
+    -- (grid/layout).  They have no real folder path, so we reset
+    -- lastAppliedPath to ensure the default is always reapplied
+    -- when returning to the file browser later.
+    -- ============================================================
+    local function onEnterVirtualView()
+        lastAppliedPath = nil
+        Memory.applyDefaultMemory()
+    end
+
+    -- History: onShowHist
+    local FileManagerHistory = require("apps/filemanager/filemanagerhistory")
+    if FileManagerHistory then
+        local orig_onShowHist = FileManagerHistory.onShowHist
+        FileManagerHistory.onShowHist = function(self, ...)
+            onEnterVirtualView()
+            if orig_onShowHist then
+                return orig_onShowHist(self, ...)
+            end
+        end
+    end
+
+    -- Collections: onShowColl (Favorites / specific collection)
+    -- and onShowCollList (collection list browser)
+    local FileManagerCollection = require("apps/filemanager/filemanagercollection")
+    if FileManagerCollection then
+        local orig_onShowColl = FileManagerCollection.onShowColl
+        FileManagerCollection.onShowColl = function(self, ...)
+            onEnterVirtualView()
+            if orig_onShowColl then
+                return orig_onShowColl(self, ...)
+            end
+        end
+
+        local orig_onShowCollList = FileManagerCollection.onShowCollList
+        FileManagerCollection.onShowCollList = function(self, ...)
+            onEnterVirtualView()
+            if orig_onShowCollList then
+                return orig_onShowCollList(self, ...)
+            end
+        end
     end
 end
 
