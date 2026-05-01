@@ -964,28 +964,6 @@ function FolderMemory:_buildDefaultConfigSubmenu()
         }
     end
 
-    -- +-----------------------------------+
-    -- | 7. Clear default button           |
-    -- +-----------------------------------+
-    menu_items.clear_settings = {
-        text = _("Clear default settings"),
-        enabled_func = function()
-            return Memory.hasOwnSettings(DEFAULT_KEY)
-        end,
-        callback = function()
-            UIManager:show(ConfirmBox:new{
-                text = _("Clear all default settings? Folders without their own settings will use global defaults."),
-                ok_text = _("Clear"),
-                ok_callback = function()
-                    Memory.clearFolder(DEFAULT_KEY)
-                    UIManager:show(InfoMessage:new{
-                        text = _("Default settings cleared."),
-                    })
-                end,
-            })
-        end,
-    }
-
     -- Build the sub_item_table from menu_items, in order
     local order = {
         "sort_by",
@@ -996,7 +974,6 @@ function FolderMemory:_buildDefaultConfigSubmenu()
         "mosaic_portrait_grid",
         "mosaic_landscape_grid",
         "files_per_page",
-        "clear_settings",
     }
     local sub_item_table = {}
     for _, id in ipairs(order) do
@@ -1340,36 +1317,9 @@ function FolderMemory:addToMainMenu(menu_items)
         enabled_func = function()
             return self.ui.file_chooser and self.ui.file_chooser.path ~= nil
         end,
-        separator = true,
         sub_item_table = self:_buildConfigSubmenu(self.ui.file_chooser.path),
     })
 
-    -- Save / Update settings for this folder
-    table.insert(menu_items.folder_memory.sub_item_table, {
-        text_func = function()
-            if not self.ui.file_chooser or not self.ui.file_chooser.path then
-                return _("Save current settings for this folder")
-            end
-            if Memory.hasOwnSettings(self.ui.file_chooser.path) then
-                return _("Update settings for this folder")
-            else
-                return _("Save current settings for this folder")
-            end
-        end,
-        enabled_func = function()
-            return self.ui.file_chooser and self.ui.file_chooser.path ~= nil
-        end,
-        callback = function()
-            if not self.ui.file_chooser or not self.ui.file_chooser.path then return end
-            local current = Memory.captureCurrentSettings()
-            Memory.saveFolderMemory(self.ui.file_chooser.path, current)
-            UIManager:show(InfoMessage:new{
-                text = _("Settings saved for this folder."),
-            })
-            -- Update menu to show the new status
-            self.ui:onRefresh()
-        end,
-    })
 
     -- Clear saved settings for this folder
     table.insert(menu_items.folder_memory.sub_item_table, {
@@ -1396,13 +1346,7 @@ function FolderMemory:addToMainMenu(menu_items)
             })
         end,
     })
-
-    -- Configure default settings (separate function – never touches KOReader live state)
-    table.insert(menu_items.folder_memory.sub_item_table, {
-        text = _("Configure default settings"),
-        separator = true,
-        sub_item_table = self:_buildDefaultConfigSubmenu(),
-    })
+ 
 
     -- Toggle: inherit parent folder settings
     table.insert(menu_items.folder_memory.sub_item_table, {
@@ -1417,28 +1361,16 @@ function FolderMemory:addToMainMenu(menu_items)
         keep_menu_open = true,
     })
 
-    -- Save / Update current settings as default
+       -- Configure default settings (separate function – never touches KOReader live state)
     table.insert(menu_items.folder_memory.sub_item_table, {
-        text_func = function()
-            if Memory.hasOwnSettings("__default__") then
-                return _("Update default settings")
-            else
-                return _("Save current settings as default")
-            end
-        end,
+        text = _("Configure default settings"),
         separator = true,
-        callback = function()
-            Memory.saveAsDefault()
-            UIManager:show(InfoMessage:new{
-                text = _("Default settings saved."),
-            })
-            self.ui:onRefresh()
-        end,
+        sub_item_table = self:_buildDefaultConfigSubmenu(),
     })
 
     -- Clear all folder memory
     table.insert(menu_items.folder_memory.sub_item_table, {
-        text = _("Clear all folder memory"),
+        text = _("Clear all saved folder settings"),
         callback = function()
             UIManager:show(ConfirmBox:new{
                 text = _("Clear all saved folder settings? Default settings will be kept if they exist."),
@@ -1447,24 +1379,6 @@ function FolderMemory:addToMainMenu(menu_items)
                     Memory.clearAll(true)
                     UIManager:show(InfoMessage:new{
                         text = _("All folder memory cleared."),
-                    })
-                    self.ui:onRefresh()
-                end,
-            })
-        end,
-    })
-
-    -- Clear all including defaults
-    table.insert(menu_items.folder_memory.sub_item_table, {
-        text = _("Clear all folder memory (including defaults)"),
-        callback = function()
-            UIManager:show(ConfirmBox:new{
-                text = _("Clear ALL folder settings including the default template?"),
-                ok_text = _("Clear everything"),
-                ok_callback = function()
-                    Memory.clearAll(false)
-                    UIManager:show(InfoMessage:new{
-                        text = _("All folder memory cleared (including defaults)."),
                     })
                     self.ui:onRefresh()
                 end,
