@@ -597,8 +597,9 @@ function FolderMemory:_buildDefaultConfigSubmenu()
                     end)
                     return k == id
                 end,
-                callback = function()
+                callback = function(touchmenu_instance)
                     saveField("collate", k)
+                    if touchmenu_instance then touchmenu_instance:updateItems() end
                 end,
                 radio = true,
             })
@@ -633,11 +634,12 @@ function FolderMemory:_buildDefaultConfigSubmenu()
                 return G_reader_settings:isTrue("reverse_collate")
             end)
         end,
-        callback = function()
+        callback = function(touchmenu_instance)
             local cur = getDef("reverse_collate", function()
                 return G_reader_settings:isTrue("reverse_collate")
             end)
             saveField("reverse_collate", not cur)
+            if touchmenu_instance then touchmenu_instance:updateItems() end
         end,
     }
 
@@ -663,11 +665,12 @@ function FolderMemory:_buildDefaultConfigSubmenu()
                 return G_reader_settings:isTrue("collate_mixed")
             end)
         end,
-        callback = function()
+        callback = function(touchmenu_instance)
             local cur = getDef("collate_mixed", function()
                 return G_reader_settings:isTrue("collate_mixed")
             end)
             saveField("collate_mixed", not cur)
+            if touchmenu_instance then touchmenu_instance:updateItems() end
         end,
     }
 
@@ -687,8 +690,9 @@ function FolderMemory:_buildDefaultConfigSubmenu()
                         end)()
                 end,
                 radio = true,
-                callback = function()
+                callback = function(touchmenu_instance)
                     saveField("show_filter", nil)
+                    if touchmenu_instance then touchmenu_instance:updateItems() end
                 end,
                 separator = true,
             },
@@ -700,7 +704,7 @@ function FolderMemory:_buildDefaultConfigSubmenu()
                     local sf = getDef("show_filter", function() return G_reader_settings:readSetting("show_filter") end)
                     return sf and sf.status and sf.status[v] == true
                 end,
-                callback = function()
+                callback = function(touchmenu_instance)
                     local sf = getDef("show_filter", function() return G_reader_settings:readSetting("show_filter") end)
                     local mem = {}
                     local def = Memory.getFolderMemory(DEFAULT_KEY)
@@ -720,6 +724,7 @@ function FolderMemory:_buildDefaultConfigSubmenu()
                         mem.show_filter = new_sf
                     end
                     saveMem(mem)
+                    if touchmenu_instance then touchmenu_instance:updateItems() end
                 end,
             })
         end
@@ -773,8 +778,9 @@ function FolderMemory:_buildDefaultConfigSubmenu()
                     return dm == mode_key
                 end,
                 radio = true,
-                callback = function()
+                callback = function(touchmenu_instance)
                     saveField("display_mode", mode_key)
+                    if touchmenu_instance then touchmenu_instance:updateItems() end
                 end,
             })
         end
@@ -839,9 +845,21 @@ function FolderMemory:_buildDefaultConfigSubmenu()
                     callback = function(lv, rv)
                         left_value = lv
                         right_value = rv
+                        -- Save immediately so text_func sees the updated value
+                        editDefault(function()
+                            local def = Memory.getFolderMemory(DEFAULT_KEY)
+                            local mem = {}
+                            if def then
+                                for k, v in pairs(def) do mem[k] = v end
+                            end
+                            mem.nb_cols_portrait = lv
+                            mem.nb_rows_portrait = rv
+                            Memory.saveFolderMemory(DEFAULT_KEY, mem)
+                        end)
                         if touchmenu_instance then touchmenu_instance:updateItems() end
                     end,
                     close_callback = function()
+                        -- Final save already done in callback; just verify
                         if left_value ~= nb_cols or right_value ~= nb_rows then
                             editDefault(function()
                                 local def = Memory.getFolderMemory(DEFAULT_KEY)
@@ -899,9 +917,21 @@ function FolderMemory:_buildDefaultConfigSubmenu()
                     callback = function(lv, rv)
                         left_value = lv
                         right_value = rv
+                        -- Save immediately so text_func sees the updated value
+                        editDefault(function()
+                            local def = Memory.getFolderMemory(DEFAULT_KEY)
+                            local mem = {}
+                            if def then
+                                for k, v in pairs(def) do mem[k] = v end
+                            end
+                            mem.nb_cols_landscape = lv
+                            mem.nb_rows_landscape = rv
+                            Memory.saveFolderMemory(DEFAULT_KEY, mem)
+                        end)
                         if touchmenu_instance then touchmenu_instance:updateItems() end
                     end,
                     close_callback = function()
+                        -- Final save already done in callback; just verify
                         if left_value ~= nb_cols or right_value ~= nb_rows then
                             editDefault(function()
                                 local def = Memory.getFolderMemory(DEFAULT_KEY)
@@ -943,9 +973,20 @@ function FolderMemory:_buildDefaultConfigSubmenu()
                     keep_shown_on_apply = true,
                     callback = function(spin)
                         current_val = spin.value
+                        -- Save immediately so text_func sees the updated value
+                        editDefault(function()
+                            local def = Memory.getFolderMemory(DEFAULT_KEY)
+                            local mem = {}
+                            if def then
+                                for k, v in pairs(def) do mem[k] = v end
+                            end
+                            mem.files_per_page = spin.value
+                            Memory.saveFolderMemory(DEFAULT_KEY, mem)
+                        end)
                         if touchmenu_instance then touchmenu_instance:updateItems() end
                     end,
                     close_callback = function()
+                        -- Final save already done in callback; just verify
                         if current_val ~= fpp then
                             editDefault(function()
                                 local def = Memory.getFolderMemory(DEFAULT_KEY)
