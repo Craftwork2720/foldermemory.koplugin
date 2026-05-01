@@ -294,14 +294,13 @@ function FolderMemory:_buildDisplayModeMenuTable(save_fn)
     return {
         text_func = function()
             local dm = _BookInfoManager:getSetting("filemanager_display_mode")
-            local names = {
-                mosaic_image = _("Mosaic with cover images"),
-                mosaic_text = _("Mosaic with text covers"),
-                list_image_meta = _("Detailed list with cover images and metadata"),
-                list_only_meta = _("Detailed list with metadata, no images"),
-                list_image_filename = _("Detailed list with cover images and filenames"),
-            }
-            return T(_("Display mode: %1"), names[dm] or _("Classic"))
+            local names = {}
+            for _, mode in ipairs(modes) do
+                if mode[2] ~= nil then
+                    names[mode[2]] = mode[1]
+                end
+            end
+            return _("Display mode") .. ": " .. (names[dm] or modes[1][1])
         end,
         sub_item_table = sub_item_table,
     }
@@ -390,6 +389,7 @@ function FolderMemory:_buildConfigSubmenu(path)
     -- +--------------------------------+
     menu_items.sort_mixed = {
         text = _("Folders and files mixed"),
+        separator = true,
         enabled_func = function()
             local collate = self.ui.file_chooser:getCollate()
             return collate.can_collate_mixed or false
@@ -409,6 +409,7 @@ function FolderMemory:_buildConfigSubmenu(path)
     -- | 4. Book status     |
     -- +--------------------+
     menu_items.book_status = self:_buildBookStatusMenuTable(refresh, saveFolderSettings)
+    menu_items.book_status.separator = true
 
     -- +--------------------+
     -- | 5. Display mode    |
@@ -526,11 +527,11 @@ function FolderMemory:_buildConfigSubmenu(path)
                 }
                 UIManager:show(widget)
             end,
-            separator = true,
         }
         -- Files per page (list mode)
         menu_items.files_per_page = {
             keep_menu_open = true,
+            separator = true,
             text_func = function()
                 local v = fc.files_per_page or _BookInfoManager:getSetting("files_per_page") or 10
                 return T(_("Items per page in portrait list mode: %1"), v)
@@ -570,19 +571,8 @@ function FolderMemory:_buildConfigSubmenu(path)
     end
 
     -- +-----------------------------------+
-    -- | 7. Save / Clear buttons           |
+    -- | 7. Clear button                   |
     -- +-----------------------------------+
-    menu_items.save_settings = {
-        text = _("Save current settings for this folder"),
-        separator = true,
-        callback = function()
-            saveFolderSettings()
-            UIManager:show(InfoMessage:new{
-                text = _("Settings saved for this folder."),
-            })
-        end,
-    }
-
     menu_items.clear_settings = {
         text = _("Clear saved settings for this folder"),
         enabled_func = function()
@@ -614,7 +604,6 @@ function FolderMemory:_buildConfigSubmenu(path)
         "mosaic_portrait_grid",
         "mosaic_landscape_grid",
         "files_per_page",
-        "save_settings",
         "clear_settings",
     }
     local sub_item_table = {}
@@ -728,6 +717,7 @@ function FolderMemory:addToMainMenu(menu_items)
                 return _("Save current settings as default")
             end
         end,
+        separator = true,
         callback = function()
             Memory.saveAsDefault()
             UIManager:show(InfoMessage:new{
@@ -740,7 +730,6 @@ function FolderMemory:addToMainMenu(menu_items)
     -- Clear all folder memory
     table.insert(menu_items.folder_memory.sub_item_table, {
         text = _("Clear all folder memory"),
-        separator = true,
         callback = function()
             UIManager:show(ConfirmBox:new{
                 text = _("Clear all saved folder settings? Default settings will be kept if they exist."),
