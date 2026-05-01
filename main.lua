@@ -91,6 +91,7 @@ function FolderMemory:_setupHooks()
     -- ============================================================
     local function autoSave()
         if _applying then return end
+        if Memory._editing_default then return end
         -- Never auto-save in virtual views (History, Favorites, Collections)
         if Memory._isVirtualView() then return end
         local fm = FileManager.instance
@@ -104,6 +105,7 @@ function FolderMemory:_setupHooks()
 
     local function scheduleAutoSave()
         if _applying then return end
+        if Memory._editing_default then return end
         UIManager:nextTick(autoSave)
     end
 
@@ -512,6 +514,501 @@ function FolderMemory:_buildDisplayModeMenuTable(save_fn)
 end
 
 -- ============================================================
+-- Default config submenu builder – edits __default__ only.
+-- Never touches KOReader live settings, so hook-based auto-save
+-- never fires and changes are only persisted to the __default__
+-- entry in foldermemory.lua.
+-- ============================================================
+
+function FolderMemory:_buildDefaultConfigSubmenu()
+    local menu_items = {}
+    local DEFAULT_KEY = "__default__"
+
+    -- --------------------------------------------------------
+    -- Helpers
+    -- --------------------------------------------------------
+
+    -- Read one field from __default__ memory; fallback to liveReader().
+    local function getDef(key, liveReader)
+        local def = Memory.getFolderMemory(DEFAULT_KEY)
+        if def and def[key] ~= nil then
+            return def[key]
+        end
+        if liveReader then
+            return liveReader()
+        end
+        return nil
+    end
+
+    -- Edit __default__ entry safely: set the flag so auto-save hooks
+    -- bail out, then clear it on nextTick.
+    local function editDefault(fn)
+        Memory._editing_default = true
+        fn()
+        UIManager:nextTick(function() Memory._editing_default = false end)
+    end
+
+    -- Save a single field to __default__, preserving other fields.
+    local function saveField(key, value)
+        editDefault(function()
+            local def = Memory.getFolderMemory(DEFAULT_KEY)
+            local mem = {}
+            if def then
+                for k, v in pairs(def) do mem[k] = v end
+            end
+            if value == nil then
+                mem[key] = nil
+            else
+                mem[key] = value
+            end
+            Memory.saveFolderMemory(DEFAULT_KEY, mem)
+        end)
+    end
+
+    -- Shallow-clone a table (used for show_filter).
+    local function shallowClone(t)
+        if not t then return {} end
+        local c = {}
+        for k, v in pairs(t) do c[k] = v end
+        return c
+    end
+
+    -- Save the whole mem table (used when multiple fields change, e.g. show_filter).
+    local function saveMem(new_mem)
+        editDefault(function()
+            Memory.saveFolderMemory(DEFAULT_KEY, new_mem)
+        end)
+    end
+
+    -- +----------------------------+
+    -- | 1. Sort by (radio submenu) |
+    -- +----------------------------+
+    local function buildSortBySubmenu()
+        local sub = {}
+        local fc = self.ui.file_chooser
+        for k, v in pairs(fc.collates) do
+            table.insert(sub, {
+                text = v.text,
+                menu_order = v.menu_order or 0,
+                checked_func = function()
+                    local id = getDef("collate", function()
+                        local _, cid = fc:getCollate()
+                        return cid
+                    end)
+                    return k == id
+                end,
+                callback = function()
+                    saveField("collate", k)
+                end,
+                radio = true,
+            })
+        end
+        table.sort(sub, function(a, b) return a.menu_order < b.menu_order end)
+        return sub
+    end
+
+    menu_items.sort_by = {
+        text_func = function()
+            local fc = self.ui.file_chooser
+            local id = getDef("collate", function()
+                local _, cid = fc:getCollate()
+                return cid
+            end)
+            local label = "access"
+            if id and fc.collates[id] then
+                label = fc.collates[id].text
+            end
+            return T(_("Sort by: %1"), label)
+        end,
+        sub_item_table = buildSortBySubmenu(),
+    }
+
+    -- +--------------------+
+    -- | 2. Reverse sorting |
+    -- +--------------------+
+    menu_items.reverse_sorting = {
+        text = _("Reverse sorting"),
+        checked_func = function()
+            return getDef("reverse_collate", function()
+                return G_reader_settings:isTrue("reverse_collate")
+            end)
+        end,
+        callback = function()
+            local cur = getDef("reverse_collate", function()
+                return G_reader_settings:isTrue("reverse_collate")
+            end)
+            saveField("reverse_collate", not cur)
+        end,
+    }
+
+    -- +--------------------------------+
+    -- | 3. Folders and files mixed     |
+    -- +--------------------------------+
+    menu_items.sort_mixed = {
+        text = _("Folders and files mixed"),
+        separator = true,
+        enabled_func = function()
+            local fc = self.ui.file_chooser
+            local id = getDef("collate", function()
+                local _, cid = fc:getCollate()
+                return cid
+            end)
+            if id and fc.collates[id] then
+                return fc.collates[id].can_collate_mixed or false
+            end
+            return false
+        end,
+        checked_func = function()
+            return getDef("collate_mixed", function()
+                return G_reader_settings:isTrue("collate_mixed")
+            end)
+        end,
+        callback = function()
+            local cur = getDef("collate_mixed", function()
+                return G_reader_settings:isTrue("collate_mixed")
+            end)
+            saveField("collate_mixed", not cur)
+        end,
+    }
+
+    -- +---------------------+
+    -- | 4. Book status      |
+    -- +---------------------+
+    do
+        local statuses = { "new", "reading", "abandoned", "complete" }
+        local sub_item_table = {
+            {
+                text = BookList.getBookStatusString("all"):lower(),
+                checked_func = function()
+                    return getDef("show_filter", function() return G_reader_settings:readSetting("show_filter") end) == nil
+                        or (function()
+                            local sf = getDef("show_filter", function() return G_reader_settings:readSetting("show_filter") end)
+                            return sf == nil or sf.status == nil
+                        end)()
+                end,
+                radio = true,
+                callback = function()
+                    saveField("show_filter", nil)
+                end,
+                separator = true,
+            },
+        }
+        for _, v in ipairs(statuses) do
+            table.insert(sub_item_table, {
+                text = BookList.getBookStatusString(v):lower(),
+                checked_func = function()
+                    local sf = getDef("show_filter", function() return G_reader_settings:readSetting("show_filter") end)
+                    return sf and sf.status and sf.status[v] == true
+                end,
+                callback = function()
+                    local sf = getDef("show_filter", function() return G_reader_settings:readSetting("show_filter") end)
+                    local mem = {}
+                    local def = Memory.getFolderMemory(DEFAULT_KEY)
+                    if def then
+                        for kk, vv in pairs(def) do mem[kk] = vv end
+                    end
+                    local new_sf = {}
+                    if sf and sf.status then
+                        new_sf = { status = shallowClone(sf.status) }
+                    else
+                        new_sf = { status = {} }
+                    end
+                    new_sf.status[v] = not new_sf.status[v] or nil
+                    if not next(new_sf.status) then
+                        mem.show_filter = nil
+                    else
+                        mem.show_filter = new_sf
+                    end
+                    saveMem(mem)
+                end,
+            })
+        end
+        menu_items.book_status = {
+            text_func = function()
+                local sf = getDef("show_filter", function() return G_reader_settings:readSetting("show_filter") end)
+                local text
+                if sf == nil or sf.status == nil then
+                    text = BookList.getBookStatusString("all"):lower()
+                else
+                    for _, v in ipairs(statuses) do
+                        if sf.status[v] then
+                            local status_string = BookList.getBookStatusString(v):lower()
+                            text = text and text .. ", " .. status_string or status_string
+                        end
+                    end
+                end
+                return T(_("Book status: %1"), text)
+            end,
+            sub_item_table = sub_item_table,
+            hold_callback = function(touchmenu_instance)
+                saveField("show_filter", nil)
+                touchmenu_instance:updateItems()
+            end,
+        }
+        menu_items.book_status.separator = true
+    end
+
+    -- +--------------------+
+    -- | 5. Display mode    |
+    -- +--------------------+
+    if _hasBookInfoManager then
+        local modes = {
+            { _("Classic (filename only)"), nil },
+            { _("Mosaic with cover images"), "mosaic_image" },
+            { _("Mosaic with text covers"), "mosaic_text" },
+            { _("Detailed list with cover images and metadata"), "list_image_meta" },
+            { _("Detailed list with metadata, no images"), "list_only_meta" },
+            { _("Detailed list with cover images and filenames"), "list_image_filename" },
+        }
+        local sub_item_table = {}
+        for _, mode in ipairs(modes) do
+            local mode_label = mode[1]
+            local mode_key = mode[2]
+            table.insert(sub_item_table, {
+                text = mode_label,
+                checked_func = function()
+                    local dm = getDef("display_mode", function()
+                        return _BookInfoManager:getSetting("filemanager_display_mode")
+                    end)
+                    return dm == mode_key
+                end,
+                radio = true,
+                callback = function()
+                    saveField("display_mode", mode_key)
+                end,
+            })
+        end
+        menu_items.display_mode = {
+            text_func = function()
+                local dm = getDef("display_mode", function()
+                    return _BookInfoManager:getSetting("filemanager_display_mode")
+                end)
+                local names = {}
+                for _, mode in ipairs(modes) do
+                    if mode[2] ~= nil then
+                        names[mode[2]] = mode[1]
+                    end
+                end
+                return _("Display mode") .. ": " .. (names[dm] or modes[1][1])
+            end,
+            sub_item_table = sub_item_table,
+        }
+    end
+
+    -- +-----------------------------------+
+    -- | 6. Items per page (grid / list)   |
+    -- +-----------------------------------+
+    if _hasBookInfoManager then
+        -- Portrait mosaic grid
+        menu_items.mosaic_portrait_grid = {
+            keep_menu_open = true,
+            text_func = function()
+                local cols = getDef("nb_cols_portrait", function()
+                    return _BookInfoManager:getSetting("nb_cols_portrait")
+                end) or 3
+                local rows = getDef("nb_rows_portrait", function()
+                    return _BookInfoManager:getSetting("nb_rows_portrait")
+                end) or 3
+                return T(_("Items per page in portrait mosaic mode: %1 × %2"), cols, rows)
+            end,
+            callback = function(touchmenu_instance)
+                local nb_cols = getDef("nb_cols_portrait", function()
+                    return _BookInfoManager:getSetting("nb_cols_portrait")
+                end) or 3
+                local nb_rows = getDef("nb_rows_portrait", function()
+                    return _BookInfoManager:getSetting("nb_rows_portrait")
+                end) or 3
+                local left_value = nb_cols
+                local right_value = nb_rows
+                local widget = DoubleSpinWidget:new{
+                    title_text = _("Default portrait mosaic mode"),
+                    width_factor = 0.6,
+                    left_text = _("Columns"),
+                    left_value = nb_cols,
+                    left_min = 2,
+                    left_max = 8,
+                    left_default = 3,
+                    left_precision = "%01d",
+                    right_text = _("Rows"),
+                    right_value = nb_rows,
+                    right_min = 2,
+                    right_max = 8,
+                    right_default = 3,
+                    right_precision = "%01d",
+                    keep_shown_on_apply = true,
+                    callback = function(lv, rv)
+                        left_value = lv
+                        right_value = rv
+                        if touchmenu_instance then touchmenu_instance:updateItems() end
+                    end,
+                    close_callback = function()
+                        if left_value ~= nb_cols or right_value ~= nb_rows then
+                            editDefault(function()
+                                local def = Memory.getFolderMemory(DEFAULT_KEY)
+                                local mem = {}
+                                if def then
+                                    for k, v in pairs(def) do mem[k] = v end
+                                end
+                                mem.nb_cols_portrait = left_value
+                                mem.nb_rows_portrait = right_value
+                                Memory.saveFolderMemory(DEFAULT_KEY, mem)
+                            end)
+                        end
+                    end,
+                }
+                UIManager:show(widget)
+            end,
+        }
+        -- Landscape mosaic grid
+        menu_items.mosaic_landscape_grid = {
+            keep_menu_open = true,
+            text_func = function()
+                local cols = getDef("nb_cols_landscape", function()
+                    return _BookInfoManager:getSetting("nb_cols_landscape")
+                end) or 4
+                local rows = getDef("nb_rows_landscape", function()
+                    return _BookInfoManager:getSetting("nb_rows_landscape")
+                end) or 2
+                return T(_("Items per page in landscape mosaic mode: %1 × %2"), cols, rows)
+            end,
+            callback = function(touchmenu_instance)
+                local nb_cols = getDef("nb_cols_landscape", function()
+                    return _BookInfoManager:getSetting("nb_cols_landscape")
+                end) or 4
+                local nb_rows = getDef("nb_rows_landscape", function()
+                    return _BookInfoManager:getSetting("nb_rows_landscape")
+                end) or 2
+                local left_value = nb_cols
+                local right_value = nb_rows
+                local widget = DoubleSpinWidget:new{
+                    title_text = _("Default landscape mosaic mode"),
+                    width_factor = 0.6,
+                    left_text = _("Columns"),
+                    left_value = nb_cols,
+                    left_min = 2,
+                    left_max = 8,
+                    left_default = 4,
+                    left_precision = "%01d",
+                    right_text = _("Rows"),
+                    right_value = nb_rows,
+                    right_min = 2,
+                    right_max = 8,
+                    right_default = 2,
+                    right_precision = "%01d",
+                    keep_shown_on_apply = true,
+                    callback = function(lv, rv)
+                        left_value = lv
+                        right_value = rv
+                        if touchmenu_instance then touchmenu_instance:updateItems() end
+                    end,
+                    close_callback = function()
+                        if left_value ~= nb_cols or right_value ~= nb_rows then
+                            editDefault(function()
+                                local def = Memory.getFolderMemory(DEFAULT_KEY)
+                                local mem = {}
+                                if def then
+                                    for k, v in pairs(def) do mem[k] = v end
+                                end
+                                mem.nb_cols_landscape = left_value
+                                mem.nb_rows_landscape = right_value
+                                Memory.saveFolderMemory(DEFAULT_KEY, mem)
+                            end)
+                        end
+                    end,
+                }
+                UIManager:show(widget)
+            end,
+        }
+        -- Files per page (list mode)
+        menu_items.files_per_page = {
+            keep_menu_open = true,
+            separator = true,
+            text_func = function()
+                local v = getDef("files_per_page", function()
+                    return _BookInfoManager:getSetting("files_per_page")
+                end) or 10
+                return T(_("Items per page in portrait list mode: %1"), v)
+            end,
+            callback = function(touchmenu_instance)
+                local fpp = getDef("files_per_page", function()
+                    return _BookInfoManager:getSetting("files_per_page")
+                end) or 10
+                local current_val = fpp
+                local widget = SpinWidget:new{
+                    title_text = _("Default portrait list mode"),
+                    value = fpp,
+                    value_min = 4,
+                    value_max = 20,
+                    default_value = 10,
+                    keep_shown_on_apply = true,
+                    callback = function(spin)
+                        current_val = spin.value
+                        if touchmenu_instance then touchmenu_instance:updateItems() end
+                    end,
+                    close_callback = function()
+                        if current_val ~= fpp then
+                            editDefault(function()
+                                local def = Memory.getFolderMemory(DEFAULT_KEY)
+                                local mem = {}
+                                if def then
+                                    for k, v in pairs(def) do mem[k] = v end
+                                end
+                                mem.files_per_page = current_val
+                                Memory.saveFolderMemory(DEFAULT_KEY, mem)
+                            end)
+                        end
+                    end,
+                }
+                UIManager:show(widget)
+            end,
+        }
+    end
+
+    -- +-----------------------------------+
+    -- | 7. Clear default button           |
+    -- +-----------------------------------+
+    menu_items.clear_settings = {
+        text = _("Clear default settings"),
+        enabled_func = function()
+            return Memory.hasOwnSettings(DEFAULT_KEY)
+        end,
+        callback = function()
+            UIManager:show(ConfirmBox:new{
+                text = _("Clear all default settings? Folders without their own settings will use global defaults."),
+                ok_text = _("Clear"),
+                ok_callback = function()
+                    Memory.clearFolder(DEFAULT_KEY)
+                    UIManager:show(InfoMessage:new{
+                        text = _("Default settings cleared."),
+                    })
+                end,
+            })
+        end,
+    }
+
+    -- Build the sub_item_table from menu_items, in order
+    local order = {
+        "sort_by",
+        "reverse_sorting",
+        "sort_mixed",
+        "book_status",
+        "display_mode",
+        "mosaic_portrait_grid",
+        "mosaic_landscape_grid",
+        "files_per_page",
+        "clear_settings",
+    }
+    local sub_item_table = {}
+    for _, id in ipairs(order) do
+        if menu_items[id] then
+            table.insert(sub_item_table, menu_items[id])
+        end
+    end
+
+    return sub_item_table
+end
+
+-- ============================================================
 -- Config submenu builder – returns a table of menu items
 -- ============================================================
 
@@ -898,6 +1395,13 @@ function FolderMemory:addToMainMenu(menu_items)
                 end,
             })
         end,
+    })
+
+    -- Configure default settings (separate function – never touches KOReader live state)
+    table.insert(menu_items.folder_memory.sub_item_table, {
+        text = _("Configure default settings"),
+        separator = true,
+        sub_item_table = self:_buildDefaultConfigSubmenu(),
     })
 
     -- Toggle: inherit parent folder settings

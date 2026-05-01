@@ -30,6 +30,11 @@ local _hasBookInfoManager = nil
 -- Whether to inherit settings from parent folders (default: true)
 Memory.inheritance_enabled = true
 
+-- Flag: true while editing __default__ settings from the config submenu.
+-- When set, all auto-save hooks bail out so that changes are only persisted
+-- to the __default__ entry and never leak to the current folder.
+Memory._editing_default = false
+
 --- Initialize: load settings once, check optional modules
 function Memory.init()
     _settings = LuaSettings:open(SETTINGS_FILE)
