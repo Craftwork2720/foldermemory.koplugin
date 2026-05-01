@@ -51,6 +51,8 @@ function Memory.init()
         _hasBookInfoManager = false
         _BookInfoManager = nil
     end
+    -- Auto-create __default__ from current settings on first install
+    Memory.ensureDefaultSettings()
 end
 
 --- Flush and close settings (call before shutdown)
@@ -216,6 +218,23 @@ function Memory.clearAll(keep_default)
         _settings:saveSetting(DEFAULT_KEY, default)
     end
     _settings:flush()
+end
+
+--- Auto-create __default__ settings from current KOReader state
+--- if no default template exists yet (used on first plugin install).
+function Memory.ensureDefaultSettings()
+    if not _settings then Memory.init() end
+    local def = _settings:readSetting(DEFAULT_KEY)
+    -- Already exists – bail out
+    if type(def) == "table" and next(def) ~= nil then
+        return
+    end
+    -- Capture current KOReader settings as the default template
+    local mem = Memory.captureCurrentSettings()
+    if mem and next(mem) ~= nil then
+        Memory.saveFolderMemory(DEFAULT_KEY, mem)
+        logger.dbg("FolderMemory: auto-created __default__ from current settings")
+    end
 end
 
 --- Clear memory for a specific folder
