@@ -21,7 +21,6 @@ Zarządzanie:
 - Wyczyść całą pamięć folderów
 --]]
 
-local Dispatcher = require("dispatcher")
 local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local ConfirmBox = require("ui/widget/confirmbox")
@@ -59,7 +58,6 @@ function FolderMemory:init()
     -- Initialize Memory module (loads settings once, checks optional modules)
     Memory.init()
     self.ui.menu:registerToMainMenu(self)
-    self:onDispatcherRegisterActions()
     self:_setupHooks()
     logger.dbg("FolderMemory: plugin loaded – per-folder sort/display/filter/grid memory enabled")
 end
@@ -92,8 +90,6 @@ function FolderMemory:_setupHooks()
     local function autoSave()
         if _applying then return end
         if Memory._editing_default then return end
-        -- Never auto-save in virtual views (History, Favorites, Collections)
-        if Memory._isVirtualView() then return end
         local fm = FileManager.instance
         if not fm or not fm.file_chooser then return end
         local path = fm.file_chooser.path
@@ -308,37 +304,32 @@ function FolderMemory:_setupHooks()
     end
 
     -- ============================================================
-    -- Hook 6: Virtual views (History, Favorites, Collections)
-    --
-    -- When entering these views, force __default__ template settings
-    -- (grid/layout).  They have no real folder path, so we reset
-    -- lastAppliedPath to ensure the default is always reapplied
-    -- when returning to the file browser later.
+    -- Reset lastAppliedPath when re-entering the file browser from
+    -- virtual views (History, Favorites, Collections) so that
+    -- folder settings are always re-applied on return to a real folder.
     -- ============================================================
-    local function onEnterVirtualView()
+    local function onLeaveVirtualView()
         lastAppliedPath = nil
-        Memory.applyDefaultMemory()
     end
 
-    -- History: onShowHist
+    -- History: onShowHist – entering virtual view
     local FileManagerHistory = require("apps/filemanager/filemanagerhistory")
     if FileManagerHistory then
         local orig_onShowHist = FileManagerHistory.onShowHist
         FileManagerHistory.onShowHist = function(self, ...)
-            onEnterVirtualView()
+            onLeaveVirtualView()
             if orig_onShowHist then
                 return orig_onShowHist(self, ...)
             end
         end
     end
 
-    -- Collections: onShowColl (Favorites / specific collection)
-    -- and onShowCollList (collection list browser)
+    -- Collections: onShowColl / onShowCollList – entering virtual view
     local FileManagerCollection = require("apps/filemanager/filemanagercollection")
     if FileManagerCollection then
         local orig_onShowColl = FileManagerCollection.onShowColl
         FileManagerCollection.onShowColl = function(self, ...)
-            onEnterVirtualView()
+            onLeaveVirtualView()
             if orig_onShowColl then
                 return orig_onShowColl(self, ...)
             end
@@ -346,60 +337,12 @@ function FolderMemory:_setupHooks()
 
         local orig_onShowCollList = FileManagerCollection.onShowCollList
         FileManagerCollection.onShowCollList = function(self, ...)
-            onEnterVirtualView()
+            onLeaveVirtualView()
             if orig_onShowCollList then
                 return orig_onShowCollList(self, ...)
             end
         end
     end
-end
-
--- ============================================================
--- Dispatcher actions – available as gestures / profiles
--- ============================================================
-
-function FolderMemory:onDispatcherRegisterActions()
-    Dispatcher:registerAction("save_folder_memory", {
-        category = "none",
-        event = "SaveFolderMemory",
-        title = _("FolderMemory: save settings for current folder"),
-        filemanager = true,
-    })
-    Dispatcher:registerAction("clear_folder_memory", {
-        category = "none",
-        event = "ClearFolderMemory",
-        title = _("FolderMemory: clear settings for current folder"),
-        filemanager = true,
-    })
-end
-
-function FolderMemory:onSaveFolderMemory()
-    local path = self.ui.file_chooser and self.ui.file_chooser.path
-    if not path then
-        UIManager:show(InfoMessage:new{
-            text = _("This action is only available in File browser."),
-        })
-        return
-    end
-    local current = Memory.captureCurrentSettings()
-    Memory.saveFolderMemory(path, current)
-    UIManager:show(InfoMessage:new{
-        text = _("Settings saved for this folder."),
-    })
-end
-
-function FolderMemory:onClearFolderMemory()
-    local path = self.ui.file_chooser and self.ui.file_chooser.path
-    if not path then
-        UIManager:show(InfoMessage:new{
-            text = _("This action is only available in File browser."),
-        })
-        return
-    end
-    Memory.clearFolder(path)
-    UIManager:show(InfoMessage:new{
-        text = _("Folder settings cleared."),
-    })
 end
 
 -- +--------------------------------------------+
@@ -471,7 +414,7 @@ end
 
 function FolderMemory:_buildDisplayModeMenuTable(save_fn)
     local modes = {
-        { _("Classic (filename only)"), nil },
+        { _("Classic (filename only)"), "classic" },
         { _("Mosaic with cover images"), "mosaic_image" },
         { _("Mosaic with text covers"), "mosaic_text" },
         { _("Detailed list with cover images and metadata"), "list_image_meta" },
@@ -486,13 +429,18 @@ function FolderMemory:_buildDisplayModeMenuTable(save_fn)
             text = mode_label,
             checked_func = function()
                 local current = _BookInfoManager:getSetting("filemanager_display_mode")
+                if mode_key == "classic" then
+                    return current == nil or current == "classic"
+                end
                 return current == mode_key
             end,
             radio = true,
             callback = function()
                 local ui = FileManager.instance
                 if ui and ui.coverbrowser then
-                    ui.coverbrowser:setDisplayMode(mode_key)
+                    -- "classic" in CoverBrowser is nil
+                    local dm = (mode_key == "classic") and nil or mode_key
+                    ui.coverbrowser:setDisplayMode(dm)
                 end
                 if save_fn then save_fn() end
             end,
@@ -501,9 +449,12 @@ function FolderMemory:_buildDisplayModeMenuTable(save_fn)
     return {
         text_func = function()
             local dm = _BookInfoManager:getSetting("filemanager_display_mode")
+            if dm == nil or dm == "classic" then
+                return _("Display mode") .. ": " .. modes[1][1]
+            end
             local names = {}
             for _, mode in ipairs(modes) do
-                if mode[2] ~= nil then
+                if mode[2] ~= nil and mode[2] ~= "classic" then
                     names[mode[2]] = mode[1]
                 end
             end
@@ -758,7 +709,7 @@ function FolderMemory:_buildDefaultConfigSubmenu()
     -- +--------------------+
     if _hasBookInfoManager then
         local modes = {
-            { _("Classic (filename only)"), nil },
+            { _("Classic (filename only)"), "classic" },
             { _("Mosaic with cover images"), "mosaic_image" },
             { _("Mosaic with text covers"), "mosaic_text" },
             { _("Detailed list with cover images and metadata"), "list_image_meta" },
@@ -775,6 +726,9 @@ function FolderMemory:_buildDefaultConfigSubmenu()
                     local dm = getDef("display_mode", function()
                         return _BookInfoManager:getSetting("filemanager_display_mode")
                     end)
+                    if mode_key == "classic" then
+                        return dm == nil or dm == "classic"
+                    end
                     return dm == mode_key
                 end,
                 radio = true,
@@ -789,9 +743,12 @@ function FolderMemory:_buildDefaultConfigSubmenu()
                 local dm = getDef("display_mode", function()
                     return _BookInfoManager:getSetting("filemanager_display_mode")
                 end)
+                if dm == nil or dm == "classic" then
+                    return _("Display mode") .. ": " .. modes[1][1]
+                end
                 local names = {}
                 for _, mode in ipairs(modes) do
-                    if mode[2] ~= nil then
+                    if mode[2] ~= nil and mode[2] ~= "classic" then
                         names[mode[2]] = mode[1]
                     end
                 end

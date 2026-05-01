@@ -92,18 +92,6 @@ local function _getParentPath(path)
     return nil
 end
 
---- Check if we are currently in a virtual view (History, Favorites, Collections)
---- where there is no real folder path and only grid/layout settings from __default__
---- should be used.
-function Memory._isVirtualView()
-    local fm = FileManager.instance
-    if not fm then return false end
-    if fm.history and fm.history.booklist_menu then return true end
-    if fm.collections and fm.collections.booklist_menu then return true end
-    if fm.collections and fm.collections.coll_list then return true end
-    return false
-end
-
 --- Read saved memory for a given path.
 --- Returns nil if no entry exists (caller decides fallback logic).
 --- Inheritance chain:
@@ -116,15 +104,6 @@ end
 function Memory.getFolderMemory(path)
     if not _settings then
         Memory.init()
-    end
-
-    -- Virtual views (History, Favorites, Collections) always use __default__
-    if Memory._isVirtualView() then
-        local def = _settings:readSetting(DEFAULT_KEY)
-        if type(def) == "table" and next(def) ~= nil then
-            return def
-        end
-        return nil
     end
 
     -- 1. Own settings
@@ -279,8 +258,9 @@ function Memory.captureCurrentSettings()
     end
 
     -- Display mode from CoverBrowser (if available)
+    -- nil in CoverBrowser means "classic" – store it explicitly as "classic"
     if _hasBookInfoManager then
-        mem.display_mode = _BookInfoManager:getSetting("filemanager_display_mode")
+        mem.display_mode = _BookInfoManager:getSetting("filemanager_display_mode") or "classic"
         mem.nb_cols_portrait = _BookInfoManager:getSetting("nb_cols_portrait")
         mem.nb_rows_portrait = _BookInfoManager:getSetting("nb_rows_portrait")
         mem.nb_cols_landscape = _BookInfoManager:getSetting("nb_cols_landscape")
@@ -339,11 +319,13 @@ function Memory.applyFolderMemory(mem)
         FileChooser.show_filter = {}
     end
 
-    -- Display mode (skip in virtual views – History/Favorites/Collections)
-    if mem.display_mode ~= nil and not Memory._isVirtualView() then
+    -- Display mode
+    if mem.display_mode ~= nil then
         local ui = FileManager.instance
         if ui and ui.coverbrowser then
-            ui.coverbrowser:setDisplayMode(mem.display_mode)
+            -- "classic" is the empty/nil mode in CoverBrowser
+            local dm = (mem.display_mode == "classic") and nil or mem.display_mode
+            ui.coverbrowser:setDisplayMode(dm)
         end
     end
 
