@@ -65,7 +65,7 @@ function FolderMemory:init()
 end
 
 -- ============================================================
--- Hooki – refreshPath do przywracania pamięci
+-- Hooki – refreshPath do przywracania pamięci + auto-save
 -- ============================================================
 
 function FolderMemory:_setupHooks()
@@ -76,6 +76,47 @@ function FolderMemory:_setupHooks()
     -- sort/book-status would be immediately reverted).
     -- ============================================================
     local lastAppliedPath = nil
+
+    -- ============================================================
+    -- Flag: true while applyFolderMemory is running.
+    -- All auto-save hooks check this to avoid feedback loops
+    -- (restore triggers hooks → hooks would re-save → pointless).
+    -- ============================================================
+    local _applying = false
+
+    -- ============================================================
+    -- Core auto-save: capture + persist current settings for the
+    -- active folder.  Always called via nextTick so the original
+    -- setter has fully finished before we snapshot state.
+    -- ============================================================
+    local function autoSave()
+        if _applying then return end
+        local fm = FileManager.instance
+        if not fm or not fm.file_chooser then return end
+        local path = fm.file_chooser.path
+        if not path then return end
+        local current = Memory.captureCurrentSettings()
+        Memory.saveFolderMemory(path, current)
+        logger.dbg("FolderMemory: auto-saved settings for", path)
+    end
+
+    local function scheduleAutoSave()
+        if _applying then return end
+        UIManager:nextTick(autoSave)
+    end
+
+    -- ============================================================
+    -- Wrap Memory.applyFolderMemory so the _applying flag is set
+    -- around the call – this suppresses all auto-save hooks that
+    -- fire as a side-effect of restoring settings.
+    -- ============================================================
+    local orig_apply = Memory.applyFolderMemory
+    Memory.applyFolderMemory = function(mem)
+        _applying = true
+        local ok, err = pcall(orig_apply, mem)
+        _applying = false
+        if not ok then error(err, 2) end
+    end
 
     -- ============================================================
     -- Helper: apply folder memory for a given path, but only if
@@ -144,6 +185,122 @@ function FolderMemory:_setupHooks()
         if not ok then
             logger.warn("FolderMemory: onRefresh failed:", err)
         end
+    end
+
+    -- ============================================================
+    -- AUTO-SAVE HOOKS – catch changes made via native KOReader menus
+    -- ============================================================
+
+    -- --------------------------------------------------------
+    -- Hook 3: G_reader_settings – collate / reverse / mixed
+    --
+    -- The native sort menus call:
+    --   G_reader_settings:saveSetting("collate", id)
+    --   G_reader_settings:flipNilOrFalse("reverse_collate")
+    --   G_reader_settings:flipNilOrFalse("collate_mixed")
+    --
+    -- We hook saveSetting for "collate" and flipNilOrFalse for
+    -- the two boolean toggles (flipNilOrFalse internally calls
+    -- saveSetting *or* delSetting – hooking it once covers both).
+    -- --------------------------------------------------------
+    local _collate_watch  = { collate = true }
+    local _boolean_watch  = { reverse_collate = true, collate_mixed = true }
+
+    local orig_gs_save = G_reader_settings.saveSetting
+    G_reader_settings.saveSetting = function(self, key, val, ...)
+        orig_gs_save(self, key, val, ...)
+        if _collate_watch[key] then
+            scheduleAutoSave()
+        end
+    end
+
+    local orig_gs_flip = G_reader_settings.flipNilOrFalse
+    if orig_gs_flip then
+        G_reader_settings.flipNilOrFalse = function(self, key, ...)
+            orig_gs_flip(self, key, ...)
+            if _boolean_watch[key] then
+                scheduleAutoSave()
+            end
+        end
+    end
+
+    -- --------------------------------------------------------
+    -- Hook 4: BookInfoManager.saveSetting – display mode + grid
+    --
+    -- CoverBrowser's setDisplayMode() and the grid-size dialogs
+    -- all funnel through _BookInfoManager:saveSetting().
+    -- We intercept the relevant keys and schedule an auto-save.
+    -- --------------------------------------------------------
+    if _hasBookInfoManager then
+        local _bim_watch = {
+            filemanager_display_mode = true,
+            nb_cols_portrait         = true,
+            nb_rows_portrait         = true,
+            nb_cols_landscape        = true,
+            nb_rows_landscape        = true,
+            files_per_page           = true,
+        }
+        local orig_bim_save = _BookInfoManager.saveSetting
+        _BookInfoManager.saveSetting = function(self, key, val, ...)
+            orig_bim_save(self, key, val, ...)
+            if _bim_watch[key] then
+                scheduleAutoSave()
+            end
+        end
+    end
+
+    -- --------------------------------------------------------
+    -- Hook 5: FileChooser.show_filter (book status filter)
+    --
+    -- The native book-status menu writes directly to the class-
+    -- level table FileChooser.show_filter.status, then calls
+    -- refreshPath.  There is no setter to hook, so we detect
+    -- changes via a fingerprint compared on every refreshPath.
+    --
+    -- Strategy: wrap the already-wrapped FileChooser.refreshPath
+    -- (Hook 1) with a second, thin wrapper that runs *before*
+    -- the inner wrapper and checks whether show_filter changed.
+    -- --------------------------------------------------------
+    local function filterFingerprint()
+        local sf = FileChooser.show_filter
+        if not sf or not sf.status or not next(sf.status) then return "" end
+        local parts = {}
+        for k, v in pairs(sf.status) do
+            if v then table.insert(parts, k) end
+        end
+        table.sort(parts)
+        return table.concat(parts, ",")
+    end
+
+    -- Initialise fingerprint to whatever state was restored at startup;
+    -- updated again after every apply so we don't spuriously fire.
+    local _lastFilterFP = filterFingerprint()
+
+    -- Patch applyFolderMemory wrapper once more to also reset the
+    -- fingerprint after an apply (prevents false-positive auto-save
+    -- from the refreshPath that follows restoration).
+    local orig_apply_wrapped = Memory.applyFolderMemory
+    Memory.applyFolderMemory = function(mem)
+        orig_apply_wrapped(mem)
+        -- Snapshot the filter we just applied so Hook 5 won't fire.
+        _lastFilterFP = filterFingerprint()
+    end
+
+    -- Second wrapper around FileChooser.refreshPath (wraps Hook 1's version).
+    -- The fingerprint check runs BEFORE the inner wrapper (which updates
+    -- lastAppliedPath), so on folder navigation self.path != lastAppliedPath
+    -- and we skip the check entirely – no spurious auto-save on cd.
+    local orig_refreshPath2 = FileChooser.refreshPath
+    FileChooser.refreshPath = function(self)
+        if self.name == "filemanager" and not _applying
+                and self.path == lastAppliedPath then
+            local fp = filterFingerprint()
+            if fp ~= _lastFilterFP then
+                _lastFilterFP = fp
+                scheduleAutoSave()
+            end
+        end
+        orig_refreshPath2(self)
     end
 end
 
