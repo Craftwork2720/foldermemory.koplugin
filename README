@@ -19,7 +19,7 @@ When you navigate into a folder, **Folder Memory** remembers and restores:
 
 If a folder has no saved settings of its own, the plugin walks up the directory tree and uses the nearest ancestor's settings. If none is found, it falls back to a global default template you can configure.
 
-This means you can save settings once on `Books/` and all subfolders (`Books/Fantasy/`, `Books/Sci-Fi/`, etc.) will inherit them — unless you override a specific folder.
+This means you can save settings once on `Books/` and all subfolders (`Books/Fantasy/`, `Books/Sci-Fi/`, etc.) will inherit them — unless you override a specific folder. When inheritance is disabled, every folder without its own settings goes directly to the default template.
 
 ### Default template
 
@@ -27,10 +27,8 @@ A global `__default__` template is auto-created from your current KOReader setti
 
 ## How it works
 
-- **Auto-restore** — when you enter a folder (including on return from the reader), the plugin applies the saved settings before the file list renders.
 - **Auto-save** — any change you make to sort, display mode, grid, or book status filter via KOReader's native menus is automatically captured and saved for the current folder.
-- **Virtual views** (History, Favorites, Collections) always use the default template, and your real folder's settings are restored when you leave them.
-- **No UI flicker** — settings are applied before the list is drawn, so you never see the wrong sort or display mode flash on screen.
+- **History, Favorites, Collections** — use the Items per page from default template
 
 ## Installation
 
