@@ -4,6 +4,10 @@
 
 A KOReader plugin that remembers per-folder settings and restores them automatically when you return to a folder.
 
+## Screenshot
+
+<img src="screenshots/foldermemory-grids.png" width="500">
+
 ## What it does
 
 When you navigate into a folder, **Folder Memory** remembers and restores:
