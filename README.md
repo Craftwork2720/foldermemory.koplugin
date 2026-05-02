@@ -27,7 +27,7 @@ A global `__default__` template is auto-created from your current KOReader setti
 
 ## How it works
 
-- **Auto-save** — any change you make to sort, display mode, grid, or book status filter via KOReader's native menus is automatically captured and saved for the current folder.
+- **Auto-save** — any change you make to sort, display mode, grid, or book status filter via KOReader's native menus or the Folder Memory menu is automatically captured and saved for the current folder.
 - **History, Favorites, Collections** — use the Items per page from default template
 
 ## Installation
