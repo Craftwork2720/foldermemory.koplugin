@@ -1,0 +1,33 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build ZIP
+        run: |
+          mkdir foldermemory.koplugin
+          cp main.lua _meta.lua LICENSE README.md foldermemory_config.lua foldermemory_hooks.lua foldermemory_menu.lua foldermemory.koplugin/
+          echo "${{ github.ref_name }}" > foldermemory.koplugin/version.txt
+          zip -r foldermemory.koplugin.zip foldermemory.koplugin/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: foldermemory.koplugin.zip
+          body: |
+            ## Installation
+            1. Download `foldermemory.koplugin.zip`
+            2. Extract to `koreader/plugins/`
+            3. Restart KOReader
