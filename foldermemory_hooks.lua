@@ -8,7 +8,7 @@ local FileChooser = require("ui/widget/filechooser")
 local FileManager = require("apps/filemanager/filemanager")
 local logger = require("logger")
 
-local Memory = require("memory")
+local Memory = require("foldermemory_config")
 
 -- Check for CoverBrowser (BookInfoManager) availability
 local _BookInfoManager = nil

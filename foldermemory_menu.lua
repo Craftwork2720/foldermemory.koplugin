@@ -13,7 +13,7 @@ local T = require("ffi/util").template
 local util = require("util")
 local logger = require("logger")
 
-local Memory = require("memory")
+local Memory = require("foldermemory_config")
 
 local BookList = require("ui/widget/booklist")
 local SpinWidget = require("ui/widget/spinwidget")

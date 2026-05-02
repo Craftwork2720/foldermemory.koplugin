@@ -28,7 +28,7 @@ local FileChooser = require("ui/widget/filechooser")
 local FileManager = require("apps/filemanager/filemanager")
 local logger = require("logger")
 
-local Memory = require("memory")
+local Memory = require("foldermemory_config")
 local hooks = require("foldermemory_hooks")
 local menu = require("foldermemory_menu")
 
