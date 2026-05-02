@@ -1,6 +1,6 @@
 [![Download foldermemory.koplugin.zip](https://img.shields.io/badge/Download-foldermemory.koplugin.zip-blue?style=for-the-badge&logo=github&logoColor=white&labelColor=1f2328)](https://github.com/Craftwork2720/-private-wip-foldermemory.koplugin/releases/latest/download/foldermemory.koplugin.zip)
 
-# foldermemory.koplugin
+# FolderMemory.koplugin
 
 A KOReader plugin that remembers per-folder settings and restores them automatically when you return to a folder.
 
