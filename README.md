@@ -1,9 +1,10 @@
 [![Download foldermemory.koplugin.zip](https://img.shields.io/badge/Download-foldermemory.koplugin.zip-blue?style=for-the-badge&logo=github&logoColor=white&labelColor=1f2328)](https://github.com/Craftwork2720/-private-wip-foldermemory.koplugin/releases/latest/download/foldermemory.koplugin.zip)
 
-# foldermemory.koplugin
+## foldermemory.koplugin
 
-FolderMemory remembers your sort, display, and layout preferences for every folder, automatically. 
+Never configure the same folder twice — Folder Memory automatically restores your preferred view, sorting, and layout for every directory.
 
+Folder Memory enhances KOReader’s file browser by persisting your per-folder preferences and restoring them automatically when you revisit a directory.
 Instead of reconfiguring sort order, display mode, or layout each time, the plugin ensures a consistent browsing experience across your library.
 
 <br>
@@ -23,9 +24,13 @@ When you navigate into a folder, **Folder Memory** remembers and restores:
 
 ### Inheritance from parent folders
 
-If a folder has no saved settings of its own, the plugin walks up the directory tree and uses the nearest ancestor's settings. If none is found, it falls back to a global default template you can configure.
+If a folder does not have its own configuration, Folder Memory traverses up the directory tree and applies the nearest parent configuration.
 
-This means you can save settings once on `Books/` and all subfolders (`Books/Fantasy/`, `Books/Sci-Fi/`, etc.) will inherit them — unless you override a specific folder. When inheritance is disabled, every folder without its own settings goes directly to the default template.
+If no parent configuration exists, the plugin falls back to a global default template.
+
+This means you can save settings once on `Books/` and all subfolders (`Books/Fantasy/`, `Books/Sci-Fi/`, etc.) will inherit them — unless you override a specific folder.
+
+If inheritance is disabled, folders without explicit settings will always use the default template.
 
 ### Default template
 
@@ -43,7 +48,7 @@ Copy the `foldermemory.koplugin` folder to `koreader/plugins/` and restart KORea
 
 ## Usage
 
-While in the file browser, open the top-left hamburger menu → **Folder memory**:
+From the file browser, open the menu (top-left) → **Folder memory**:
 
 | Menu item | Description |
 |-----------|-------------|
