@@ -296,6 +296,7 @@ function hooks.setupHooks()
 
     -- --------------------------------------------------------
     -- History: onShowHist
+    -- Uses self.booklist_menu (BookList widget).
     -- --------------------------------------------------------
     local FileManagerHistory = require("apps/filemanager/filemanagerhistory")
     if FileManagerHistory then
@@ -305,13 +306,16 @@ function hooks.setupHooks()
             if orig_onShowHist then
                 orig_onShowHist(self, ...)
             end
-            -- hist_menu is the Menu widget created by onShowHist
-            hookWidgetClose(self.hist_menu)
+            hookWidgetClose(self.booklist_menu)
         end
     end
 
     -- --------------------------------------------------------
     -- Collections: onShowColl / onShowCollList
+    -- onShowColl also covers Favorites (default collection) –
+    -- there is no separate Favorites module.
+    -- onShowColl     → self.booklist_menu (BookList)
+    -- onShowCollList → self.coll_list (Menu with collection list)
     -- --------------------------------------------------------
     local FileManagerCollection = require("apps/filemanager/filemanagercollection")
     if FileManagerCollection then
@@ -321,7 +325,7 @@ function hooks.setupHooks()
             if orig_onShowColl then
                 orig_onShowColl(self, ...)
             end
-            hookWidgetClose(self.coll_menu)
+            hookWidgetClose(self.booklist_menu)
         end
 
         local orig_onShowCollList = FileManagerCollection.onShowCollList
@@ -330,10 +334,7 @@ function hooks.setupHooks()
             if orig_onShowCollList then
                 orig_onShowCollList(self, ...)
             end
-            -- onShowCollList shows a list of collections (coll_list widget)
             hookWidgetClose(self.coll_list)
-            -- also try coll_menu in case the naming differs between KOReader builds
-            hookWidgetClose(self.coll_menu)
         end
     end
 end
