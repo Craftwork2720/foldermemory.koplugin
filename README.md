@@ -9,11 +9,13 @@ Instead of reconfiguring sort order, display mode, or layout each time, the plug
 
 <br>
 
+<picture>
 <img src="screenshots/foldermemory-grids.png" width="500">
+</picture>
 
 ## What it does
 
-When you navigate into a folder, **Folder Memory** remembers and restores:
+When you navigate into a folder, **FolderMemory** remembers and restores:
 
 - **Sort order** (by name, date, size, etc.)
 - **Reverse sort** direction
