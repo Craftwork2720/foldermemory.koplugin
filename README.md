@@ -2,10 +2,7 @@
 
 ## foldermemory.koplugin
 
-Never configure the same folder twice — Folder Memory automatically restores your preferred view, sorting, and layout for every directory.
-
-Folder Memory enhances KOReader’s file browser by persisting your per-folder preferences and restoring them automatically when you revisit a directory.
-Instead of reconfiguring sort order, display mode, or layout each time, the plugin ensures a consistent browsing experience across your library.
+A KOReader plugin that remembers per-folder settings and restores them automatically when you return to a folder.
 
 <br>
 
