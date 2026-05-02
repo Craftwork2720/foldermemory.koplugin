@@ -2,7 +2,8 @@
 
 # foldermemory.koplugin
 
-FolderMemory remembers your sort, display, and layout preferences for every folder, automatically. Instead of reconfiguring sort order, display mode, or layout each time, the plugin ensures a consistent browsing experience across your library.
+FolderMemory remembers your sort, display, and layout preferences for every folder, automatically. 
+Instead of reconfiguring sort order, display mode, or layout each time, the plugin ensures a consistent browsing experience across your library.
 
 <br>
 
