@@ -1,0 +1,55 @@
+[![Download foldermemory.koplugin.zip](https://img.shields.io/badge/Download-foldermemory.koplugin.zip-blue?style=for-the-badge&logo=github&logoColor=white&labelColor=1f2328)](https://github.com/Craftwork2720/-private-wip-foldermemory.koplugin/releases/latest/download/foldermemory.koplugin.zip)
+
+# foldermemory.koplugin
+
+A KOReader plugin that remembers per-folder settings and restores them automatically when you return to a folder.
+
+## What it does
+
+When you navigate into a folder, **Folder Memory** remembers and restores:
+
+- **Sort order** (by name, date, size, etc.)
+- **Reverse sort** direction
+- **Folders and files mixed** toggle
+- **Book status filter** (new, reading, abandoned, complete, or any combination)
+- **Display mode**: classic (filenames only), mosaic (cover images or text covers), detailed list (with images, metadata, or filenames)
+- **Items per page**: mosaic grid columns × rows (portrait and landscape), list mode files per page
+
+### Inheritance from parent folders
+
+If a folder has no saved settings of its own, the plugin walks up the directory tree and uses the nearest ancestor's settings. If none is found, it falls back to a global default template you can configure.
+
+This means you can save settings once on `Books/` and all subfolders (`Books/Fantasy/`, `Books/Sci-Fi/`, etc.) will inherit them — unless you override a specific folder.
+
+### Default template
+
+A global `__default__` template is auto-created from your current KOReader settings on first install. You can edit it anytime via the plugin menu without affecting your current folder — it serves as a fallback for folders without their own saved settings and for virtual views (History, Favorites, Collections).
+
+## How it works
+
+- **Auto-restore** — when you enter a folder (including on return from the reader), the plugin applies the saved settings before the file list renders.
+- **Auto-save** — any change you make to sort, display mode, grid, or book status filter via KOReader's native menus is automatically captured and saved for the current folder.
+- **Virtual views** (History, Favorites, Collections) always use the default template, and your real folder's settings are restored when you leave them.
+- **No UI flicker** — settings are applied before the list is drawn, so you never see the wrong sort or display mode flash on screen.
+
+## Installation
+
+Copy the `foldermemory.koplugin` folder to `koreader/plugins/` and restart KOReader.
+
+## Usage
+
+While in the file browser, open the top-left hamburger menu → **Folder memory**:
+
+| Menu item | Description |
+|-----------|-------------|
+| **Configure this folder** | Edit sort, display mode, grid, and book status filter for the current folder. Changes are saved automatically and applied immediately. |
+| **Clear saved settings for this folder** | Remove the current folder's saved settings — it will inherit from parent folders or fall back to defaults. |
+| **Inherit settings from parent folders** | Toggle inheritance on/off. When off, folders without their own settings skip ancestors and go directly to the default template. |
+| **Configure default settings** | Edit the `__default__` template. These changes never affect your current folder — they only define the fallback for unconfigured folders and virtual views. |
+| **Clear all saved folder settings** | Remove all per-folder memory. The default template is preserved. |
+
+## Compatibility
+
+Tested on KOReader 2026.03 "Snowflake" and nightly. Should work on any recent version. Requires CoverBrowser plugin for display mode and grid features (the plugin gracefully degrades if CoverBrowser is not installed).
+
+#### My [User Patches](https://github.com/Craftwork2720/koreader-patches) for KOReader. ❤️
