@@ -24,7 +24,6 @@ end
 local hooks = {}
 
 --- Główna funkcja instalująca wszystkie hooki.
---- @param self FolderMemory instance (obecnie nieużywane bezpośrednio, ale zachowane dla kompatybilności)
 function hooks.setupHooks()
     -- ============================================================
     -- Track the last path for which settings were applied.
@@ -80,7 +79,7 @@ function hooks.setupHooks()
 
     -- ============================================================
     -- Helper: apply folder memory for a given path, but only if
-    -- the path actually changed.
+    -- the path actually changed (or _force_apply is set).
     -- ============================================================
     local function applyMemoryIfNeeded(path)
         if _applying then return end
@@ -155,15 +154,6 @@ function hooks.setupHooks()
 
     -- --------------------------------------------------------
     -- Hook 3: G_reader_settings – collate / reverse / mixed
-    --
-    -- The native sort menus call:
-    --   G_reader_settings:saveSetting("collate", id)
-    --   G_reader_settings:flipNilOrFalse("reverse_collate")
-    --   G_reader_settings:flipNilOrFalse("collate_mixed")
-    --
-    -- We hook saveSetting for "collate" and flipNilOrFalse for
-    -- the two boolean toggles (flipNilOrFalse internally calls
-    -- saveSetting *or* delSetting – hooking it once covers both).
     -- --------------------------------------------------------
     local _collate_watch  = { collate = true }
     local _boolean_watch  = { reverse_collate = true, collate_mixed = true }
@@ -188,10 +178,6 @@ function hooks.setupHooks()
 
     -- --------------------------------------------------------
     -- Hook 4: BookInfoManager.saveSetting – display mode + grid
-    --
-    -- CoverBrowser's setDisplayMode() and the grid-size dialogs
-    -- all funnel through _BookInfoManager:saveSetting().
-    -- We intercept the relevant keys and schedule an auto-save.
     -- --------------------------------------------------------
     if _hasBookInfoManager then
         local _bim_watch = {
@@ -213,15 +199,6 @@ function hooks.setupHooks()
 
     -- --------------------------------------------------------
     -- Hook 5: FileChooser.show_filter (book status filter)
-    --
-    -- The native book-status menu writes directly to the class-
-    -- level table FileChooser.show_filter.status, then calls
-    -- refreshPath.  There is no setter to hook, so we detect
-    -- changes via a fingerprint compared on every refreshPath.
-    --
-    -- Strategy: wrap the already-wrapped FileChooser.refreshPath
-    -- (Hook 1) with a second, thin wrapper that runs *before*
-    -- the inner wrapper and checks whether show_filter changed.
     -- --------------------------------------------------------
     local function filterFingerprint()
         local sf = FileChooser.show_filter
@@ -234,24 +211,16 @@ function hooks.setupHooks()
         return table.concat(parts, ",")
     end
 
-    -- Initialise fingerprint to whatever state was restored at startup;
-    -- updated again after every apply so we don't spuriously fire.
     local _lastFilterFP = filterFingerprint()
 
-    -- Patch applyFolderMemory wrapper once more to also reset the
-    -- fingerprint after an apply (prevents false-positive auto-save
-    -- from the refreshPath that follows restoration).
+    -- Reset fingerprint after every apply so Hook 5 won't fire.
     local orig_apply_wrapped = Memory.applyFolderMemory
     Memory.applyFolderMemory = function(mem)
         orig_apply_wrapped(mem)
-        -- Snapshot the filter we just applied so Hook 5 won't fire.
         _lastFilterFP = filterFingerprint()
     end
 
     -- Second wrapper around FileChooser.refreshPath (wraps Hook 1's version).
-    -- The fingerprint check runs BEFORE the inner wrapper (which updates
-    -- lastAppliedPath), so on folder navigation self.path != lastAppliedPath
-    -- and we skip the check entirely – no spurious auto-save on cd.
     local orig_refreshPath2 = FileChooser.refreshPath
     FileChooser.refreshPath = function(self)
         if self.name == "filemanager" and not _applying
@@ -266,44 +235,105 @@ function hooks.setupHooks()
     end
 
     -- ============================================================
-    -- Apply __default__ when entering virtual views
-    -- (History, Favorites, Collections) and reset lastAppliedPath
-    -- so that the real folder's settings are re-applied on return.
+    -- Virtual views (History, Favorites, Collections)
     -- ============================================================
+
+    -- Called when entering a virtual view:
+    -- applies __default__ and resets tracking so the real folder's
+    -- settings will be re-applied on return.
     local function onEnterVirtualView()
         _force_apply = true
+        lastAppliedPath = nil
         Memory.applyDefaultMemory()
     end
 
+    -- Called when a virtual view widget closes:
+    -- forces Hook 1 to re-apply the real folder's memory by
+    -- calling refreshPath with tracking flags reset.
+    local function onExitVirtualView()
+        UIManager:nextTick(function()
+            local fm = FileManager.instance
+            if not fm or not fm.file_chooser then return end
+            local path = fm.file_chooser.path
+            if not path then return end
+            -- Reset tracking – Hook 1 (via refreshPath) will pick this up
+            -- and call applyMemoryIfNeeded BEFORE re-rendering the list,
+            -- ensuring G_reader_settings + CoverBrowser are up-to-date.
+            lastAppliedPath = nil
+            _force_apply = true
+            local ok, err = pcall(function()
+                fm.file_chooser:refreshPath()
+            end)
+            if not ok then
+                logger.warn("FolderMemory: onExitVirtualView refreshPath failed:", err)
+            end
+        end)
+    end
+
+    -- Wrap a widget's close points so onExitVirtualView fires when
+    -- the virtual view is dismissed.  Tries both close_callback
+    -- (Menu-style) and the onClose method (Widget-style).
+    local function hookWidgetClose(widget)
+        if not widget then return end
+        -- close_callback (preferred – used by KOReader's Menu widget)
+        if type(widget.close_callback) == "function" then
+            local orig_cb = widget.close_callback
+            widget.close_callback = function(...)
+                orig_cb(...)
+                onExitVirtualView()
+            end
+        end
+        -- onClose method (fallback for other widget types)
+        if type(widget.onClose) == "function" then
+            local orig_onClose = widget.onClose
+            widget.onClose = function(w, ...)
+                local r = orig_onClose(w, ...)
+                onExitVirtualView()
+                return r
+            end
+        end
+    end
+
+    -- --------------------------------------------------------
     -- History: onShowHist
+    -- --------------------------------------------------------
     local FileManagerHistory = require("apps/filemanager/filemanagerhistory")
     if FileManagerHistory then
         local orig_onShowHist = FileManagerHistory.onShowHist
         FileManagerHistory.onShowHist = function(self, ...)
             onEnterVirtualView()
             if orig_onShowHist then
-                return orig_onShowHist(self, ...)
+                orig_onShowHist(self, ...)
             end
+            -- hist_menu is the Menu widget created by onShowHist
+            hookWidgetClose(self.hist_menu)
         end
     end
 
+    -- --------------------------------------------------------
     -- Collections: onShowColl / onShowCollList
+    -- --------------------------------------------------------
     local FileManagerCollection = require("apps/filemanager/filemanagercollection")
     if FileManagerCollection then
         local orig_onShowColl = FileManagerCollection.onShowColl
         FileManagerCollection.onShowColl = function(self, ...)
             onEnterVirtualView()
             if orig_onShowColl then
-                return orig_onShowColl(self, ...)
+                orig_onShowColl(self, ...)
             end
+            hookWidgetClose(self.coll_menu)
         end
 
         local orig_onShowCollList = FileManagerCollection.onShowCollList
         FileManagerCollection.onShowCollList = function(self, ...)
             onEnterVirtualView()
             if orig_onShowCollList then
-                return orig_onShowCollList(self, ...)
+                orig_onShowCollList(self, ...)
             end
+            -- onShowCollList shows a list of collections (coll_list widget)
+            hookWidgetClose(self.coll_list)
+            -- also try coll_menu in case the naming differs between KOReader builds
+            hookWidgetClose(self.coll_menu)
         end
     end
 end
