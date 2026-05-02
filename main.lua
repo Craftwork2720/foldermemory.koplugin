@@ -81,7 +81,7 @@ function FolderMemory:_setupHooks()
     -- (restore triggers hooks → hooks would re-save → pointless).
     -- ============================================================
     local _applying = false
-
+    local _force_apply = false   
     -- ============================================================
     -- Core auto-save: capture + persist current settings for the
     -- active folder.  Always called via nextTick so the original
@@ -122,15 +122,19 @@ function FolderMemory:_setupHooks()
     -- Helper: apply folder memory for a given path, but only if
     -- the path actually changed.
     -- ============================================================
-    local function applyMemoryIfNeeded(path)
-        if path and path ~= lastAppliedPath then
-            lastAppliedPath = path
-            local mem = Memory.getFolderMemory(path)
-            if mem then
-                Memory.applyFolderMemory(mem)
-            end
+    
+local function applyMemoryIfNeeded(path)
+    if _applying then return end
+    if path and (path ~= lastAppliedPath or _force_apply) then   -- ← sprawdza flagę
+        _force_apply = false
+        lastAppliedPath = path
+        local mem = Memory.getFolderMemory(path)
+        if mem then
+            Memory.applyFolderMemory(mem)
         end
     end
+end
+
 
     -- ============================================================
     -- Hook 1: FileChooser.refreshPath
@@ -304,32 +308,34 @@ function FolderMemory:_setupHooks()
     end
 
     -- ============================================================
-    -- Reset lastAppliedPath when re-entering the file browser from
-    -- virtual views (History, Favorites, Collections) so that
-    -- folder settings are always re-applied on return to a real folder.
+    -- Apply __default__ when entering virtual views
+    -- (History, Favorites, Collections) and reset lastAppliedPath
+    -- so that the real folder's settings are re-applied on return.
     -- ============================================================
-    local function onLeaveVirtualView()
-        lastAppliedPath = nil
+    local function onEnterVirtualView()
+        _force_apply = true        -- ← ustaw flagę (nie zeruj lastAppliedPath)
+        Memory.applyDefaultMemory()
     end
 
-    -- History: onShowHist – entering virtual view
+
+    -- History: onShowHist
     local FileManagerHistory = require("apps/filemanager/filemanagerhistory")
     if FileManagerHistory then
         local orig_onShowHist = FileManagerHistory.onShowHist
         FileManagerHistory.onShowHist = function(self, ...)
-            onLeaveVirtualView()
+            onEnterVirtualView()
             if orig_onShowHist then
                 return orig_onShowHist(self, ...)
             end
         end
     end
 
-    -- Collections: onShowColl / onShowCollList – entering virtual view
+    -- Collections: onShowColl / onShowCollList
     local FileManagerCollection = require("apps/filemanager/filemanagercollection")
     if FileManagerCollection then
         local orig_onShowColl = FileManagerCollection.onShowColl
         FileManagerCollection.onShowColl = function(self, ...)
-            onLeaveVirtualView()
+            onEnterVirtualView()
             if orig_onShowColl then
                 return orig_onShowColl(self, ...)
             end
@@ -337,7 +343,7 @@ function FolderMemory:_setupHooks()
 
         local orig_onShowCollList = FileManagerCollection.onShowCollList
         FileManagerCollection.onShowCollList = function(self, ...)
-            onLeaveVirtualView()
+            onEnterVirtualView()
             if orig_onShowCollList then
                 return orig_onShowCollList(self, ...)
             end
