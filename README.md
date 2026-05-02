@@ -2,9 +2,9 @@
 
 # foldermemory.koplugin
 
-A KOReader plugin that remembers per-folder settings and restores them automatically when you return to a folder.
+Never set up a folder twice — Folder Memory remembers your sort, display, and layout preferences for every folder, automatically.
 
-## Screenshot
+<br>
 
 <img src="screenshots/foldermemory-grids.png" width="500">
 
