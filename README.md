@@ -25,14 +25,9 @@ When you navigate into a folder, **FolderMemory** remembers and restores:
 - **Items per page**: mosaic grid columns × rows (portrait and landscape), list mode files per page
 
 ### Inheritance from parent folders
+If a folder has no saved settings of its own, the plugin walks up the directory tree and uses the nearest ancestor's settings. If none is found, it falls back to a global default template you can configure.
 
-If a folder does not have its own configuration, Folder Memory traverses up the directory tree and applies the nearest parent configuration.
-
-If no parent configuration exists, the plugin falls back to a global default template.
-
-This means you can save settings once on `Books/` and all subfolders (`Books/Fantasy/`, `Books/Sci-Fi/`, etc.) will inherit them — unless you override a specific folder.
-
-If inheritance is disabled, folders without explicit settings will always use the default template.
+This means you can save settings once on `Books/` and all subfolders (`Books/Fantasy/`, `Books/Sci-Fi/`, etc.) will inherit them — unless you override a specific folder. When inheritance is disabled, every folder without its own settings goes directly to the default template.
 
 ### Default template
 
