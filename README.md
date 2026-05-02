@@ -2,7 +2,7 @@
 
 # foldermemory.koplugin
 
-Never set up a folder twice — Folder Memory remembers your sort, display, and layout preferences for every folder, automatically.
+FolderMemory remembers your sort, display, and layout preferences for every folder, automatically. Instead of reconfiguring sort order, display mode, or layout each time, the plugin ensures a consistent browsing experience across your library.
 
 <br>
 
@@ -32,6 +32,7 @@ A global `__default__` template is auto-created from your current KOReader setti
 ## How it works
 
 - **Auto-save** — any change you make to sort, display mode, grid, or book status filter via KOReader's native menus or the Folder Memory menu is automatically captured and saved for the current folder.
+- **Seamless restore** — settings are applied automatically when entering a folder
 - **History, Favorites, Collections** — use the Items per page from default template
 
 ## Installation
