@@ -28,7 +28,7 @@ This means you can save settings once on `Books/` and all subfolders (`Books/Fan
 
 ### Default settings for folders
 
-A `__default__` template is auto-created from your current KOReader settings on first install. You can edit it anytime via **Folder memory → Default settings for folders** without affecting your current folder — it is the fallback for folders that have no saved settings of their own (and, with inheritance on, no ancestor with any either), and for virtual views (History, Favorites, Collections).
+A `__default__` template is auto-created from your current KOReader settings on first install. You can edit it anytime via **Folder memory → Default settings for folders** without affecting your current folder — it is the fallback for folders that have no saved settings of their own (and, with inheritance on, no ancestor with any either).
 
 It is **not** a global default: it changes how folders behave and nothing else. The settings that the views outside the file browser — History, Favorites, Collections, OPDS, Calibre, search results — actually read are KOReader's own global ones, and those live in **Folder memory → Global settings for other views**.
 
@@ -53,8 +53,8 @@ From the file browser, open the menu (top-left) → **Folder memory**:
 | **Configure this folder** | Open a settings window for the current folder: sort, display mode, items per page, and book status filter. Changes are saved automatically and applied immediately. The Dispatcher action below opens the same window. |
 | **Clear saved settings for this folder** | Remove the current folder's saved settings — it will inherit from parent folders or fall back to defaults. |
 | **Inherit settings from parent folders** | Toggle inheritance on/off. When off, folders without their own settings skip ancestors and go directly to the default template. |
-| **Default settings for folders** | Edit the `__default__` template. These changes never affect your current folder — they only define the fallback for folders without saved settings of their own, and for virtual views. They do not change KOReader's global settings. |
-| **Global settings for other views** | Edit KOReader's and CoverBrowser's global settings — the ones History, Favorites, Collections, OPDS, Calibre and search results read: items per page (the only one that reaches OPDS and Calibre, which do not use CoverBrowser) and the mosaic and detailed-list grid. Deliberately not saved per folder, so a folder with its own saved value keeps it. The display modes of those views are not duplicated here — KOReader keeps them in Settings → Display mode, together with the mode choices. |
+| **Default settings for folders** | Edit the `__default__` template. These changes never affect your current folder — they only define the fallback for folders without saved settings of their own. They do not change KOReader's global settings, so History, Collections, OPDS and search results are unaffected. |
+| **Global settings for other views** | Edit KOReader's and CoverBrowser's global settings — the ones History, Favorites, Collections, OPDS, Calibre and search results read: items per page (the only one that reaches OPDS and Calibre, which do not use CoverBrowser), the mosaic and detailed-list grid, and the display mode of History and Collections. Deliberately not saved per folder, so a folder with its own saved value keeps it. KOReader's "use this mode everywhere" toggle is not repeated here — it stays next to the mode choices in Settings → Display mode, and turns these two off while it is on. |
 | **Clear all saved folder settings** | Remove all per-folder memory. The default settings for folders are preserved. |
 
 ### Gesture shortcut
