@@ -42,6 +42,12 @@ local function displayModeType(mode)
     return (mode or "classic"):gsub("_.*", "") -- "mosaic", "list" or "classic"
 end
 
+-- Whether the device is currently held in portrait – the same test CoverBrowser
+-- uses to pick between the portrait and landscape mosaic grid.
+local function isPortrait()
+    return Screen:getWidth() <= Screen:getHeight()
+end
+
 -- +--------------------------------------------+
 -- | Helper: build book status filter submenu   |
 -- +--------------------------------------------+
@@ -659,13 +665,20 @@ function menu.buildDefaultConfigSubmenu(self)
         }
 
         -- Offer only the "items per page" entries that apply to the display
-        -- mode being configured: mosaic grid for the mosaic modes, files per
-        -- page for the list modes. Classic mode uses KOReader's own
-        -- "Items per page" setting, which the plugin does not manage.
+        -- mode being configured and to the orientation the device is held in:
+        -- mosaic grid for the mosaic modes, files per page for the list modes.
+        -- Classic mode uses KOReader's own "Items per page" setting, which the
+        -- plugin does not manage.
         local mode_type = displayModeType(getDef("display_mode", function()
             return _BookInfoManager:getSetting("filemanager_display_mode")
         end))
-        if mode_type ~= "mosaic" then
+        if mode_type == "mosaic" then
+            if isPortrait() then
+                menu_items.mosaic_landscape_grid = nil
+            else
+                menu_items.mosaic_portrait_grid = nil
+            end
+        else
             menu_items.mosaic_portrait_grid = nil
             menu_items.mosaic_landscape_grid = nil
         end
@@ -972,11 +985,18 @@ function menu.buildConfigSubmenu(self)
         }
 
         -- Offer only the "items per page" entries that apply to the current
-        -- display mode: mosaic grid for the mosaic modes, files per page for
-        -- the list modes. Classic mode uses KOReader's own "Items per page"
-        -- setting, which the plugin does not manage.
+        -- display mode and to the orientation the device is held in: mosaic
+        -- grid for the mosaic modes, files per page for the list modes.
+        -- Classic mode uses KOReader's own "Items per page" setting, which the
+        -- plugin does not manage.
         local mode_type = displayModeType(_BookInfoManager:getSetting("filemanager_display_mode"))
-        if mode_type ~= "mosaic" then
+        if mode_type == "mosaic" then
+            if isPortrait() then
+                menu_items.mosaic_landscape_grid = nil
+            else
+                menu_items.mosaic_portrait_grid = nil
+            end
+        else
             menu_items.mosaic_portrait_grid = nil
             menu_items.mosaic_landscape_grid = nil
         end
@@ -1061,12 +1081,17 @@ function menu.showConfigMenu(self)
 
     -- Windows on screen: the settings one, plus the choice list opened from it.
     local main, picker
-    local showWindow, showMain, built_mode
+    local showWindow, showMain, built_state
     local refresh_scheduled = false
 
-    local function currentMode()
-        if not _hasBookInfoManager then return "classic" end
-        return _BookInfoManager:getSetting("filemanager_display_mode") or "classic"
+    -- Which "items per page" entries the window holds depends on the display
+    -- mode and on the orientation, so both are part of the state it was built for.
+    local function currentState()
+        local mode = "classic"
+        if _hasBookInfoManager then
+            mode = _BookInfoManager:getSetting("filemanager_display_mode") or "classic"
+        end
+        return mode .. (isPortrait() and "|portrait" or "|landscape")
     end
 
     -- The callbacks below were written for TouchMenu: they expect to be handed
@@ -1080,9 +1105,9 @@ function menu.showConfigMenu(self)
             refresh_scheduled = false
             local redrawn = false
             if main and not main.closed then
-                if built_mode ~= currentMode() then
-                    -- The display mode changed, and with it which "items per
-                    -- page" entries apply: rebuild the window.
+                if built_state ~= currentState() then
+                    -- The display mode or the orientation changed, and with it
+                    -- which "items per page" entries apply: rebuild the window.
                     showMain()
                 else
                     main.dialog:reinit()
@@ -1181,7 +1206,7 @@ function menu.showConfigMenu(self)
             UIManager:close(main.dialog)
             main = nil
         end
-        built_mode = currentMode()
+        built_state = currentState()
         main = showWindow(T(_("Folder memory: %1"), fc.path), menu.buildConfigSubmenu(self), false)
     end
 
