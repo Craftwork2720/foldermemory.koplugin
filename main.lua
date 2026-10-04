@@ -74,6 +74,7 @@ end
 FolderMemory._buildBookStatusMenuTable = menu.buildBookStatusMenuTable
 FolderMemory._buildDisplayModeMenuTable = menu.buildDisplayModeMenuTable
 FolderMemory._buildDefaultConfigSubmenu = menu.buildDefaultConfigSubmenu
+FolderMemory._buildOtherViewsSubmenu = menu.buildOtherViewsSubmenu
 FolderMemory._buildConfigSubmenu = menu.buildConfigSubmenu
 FolderMemory.addToMainMenu = menu.addToMainMenu
 

@@ -48,6 +48,29 @@ local function isPortrait()
     return Screen:getWidth() <= Screen:getHeight()
 end
 
+-- The CoverBrowser display modes: { mode key, label }. Classic is nil, as it is
+-- in CoverBrowser itself (a mode is absent rather than named) – the plugin only
+-- spells it "classic" when it stores one in a folder memory.
+local DISPLAY_MODES = {
+    { nil, _("Classic (filename only)") },
+    { "mosaic_image", _("Mosaic with cover images") },
+    { "mosaic_text", _("Mosaic with text covers") },
+    { "list_image_meta", _("Detailed list with cover images and metadata") },
+    { "list_only_meta", _("Detailed list with metadata, no images") },
+    { "list_image_filename", _("Detailed list with cover images and filenames") },
+}
+
+-- Label of a display mode, accepting both conventions: nil (CoverBrowser) and
+-- "classic" (as the plugin stores it in a memory). Unknown values fall back to
+-- the classic label, which is the mode KOReader itself falls back to.
+local function displayModeLabel(mode)
+    if mode == "classic" then mode = nil end
+    for _, m in ipairs(DISPLAY_MODES) do
+        if m[1] == mode then return m[2] end
+    end
+    return DISPLAY_MODES[1][2]
+end
+
 -- +--------------------------------------------+
 -- | Helper: build book status filter submenu   |
 -- +--------------------------------------------+
@@ -116,34 +139,19 @@ end
 -- +--------------------------------------------+
 
 function menu.buildDisplayModeMenuTable(self, save_fn)
-    local modes = {
-        { _("Classic (filename only)"), "classic" },
-        { _("Mosaic with cover images"), "mosaic_image" },
-        { _("Mosaic with text covers"), "mosaic_text" },
-        { _("Detailed list with cover images and metadata"), "list_image_meta" },
-        { _("Detailed list with metadata, no images"), "list_only_meta" },
-        { _("Detailed list with cover images and filenames"), "list_image_filename" },
-    }
     local sub_item_table = {}
-    for _, mode in ipairs(modes) do
-        local mode_label = mode[1]
-        local mode_key = mode[2]
+    for _, mode in ipairs(DISPLAY_MODES) do
+        local mode_key = mode[1]
         table.insert(sub_item_table, {
-            text = mode_label,
+            text = mode[2],
             checked_func = function()
-                local current = _BookInfoManager:getSetting("filemanager_display_mode")
-                if mode_key == "classic" then
-                    return current == nil or current == "classic"
-                end
-                return current == mode_key
+                return _BookInfoManager:getSetting("filemanager_display_mode") == mode_key
             end,
             radio = true,
             callback = function()
                 local ui = FileManager.instance
                 if ui and ui.coverbrowser then
-                    -- "classic" in CoverBrowser is nil
-                    local dm = (mode_key == "classic") and nil or mode_key
-                    ui.coverbrowser:setDisplayMode(dm)
+                    ui.coverbrowser:setDisplayMode(mode_key)
                 end
                 if save_fn then save_fn() end
             end,
@@ -152,16 +160,7 @@ function menu.buildDisplayModeMenuTable(self, save_fn)
     return {
         text_func = function()
             local dm = _BookInfoManager:getSetting("filemanager_display_mode")
-            if dm == nil or dm == "classic" then
-                return _("Display mode") .. ": " .. modes[1][1]
-            end
-            local names = {}
-            for _, mode in ipairs(modes) do
-                if mode[2] ~= nil and mode[2] ~= "classic" then
-                    names[mode[2]] = mode[1]
-                end
-            end
-            return _("Display mode") .. ": " .. (names[dm] or modes[1][1])
+            return _("Display mode") .. ": " .. displayModeLabel(dm)
         end,
         sub_item_table = sub_item_table,
     }
@@ -411,32 +410,22 @@ function menu.buildDefaultConfigSubmenu(self)
     -- | 5. Display mode    |
     -- +--------------------+
     if _hasBookInfoManager then
-        local modes = {
-            { _("Classic (filename only)"), "classic" },
-            { _("Mosaic with cover images"), "mosaic_image" },
-            { _("Mosaic with text covers"), "mosaic_text" },
-            { _("Detailed list with cover images and metadata"), "list_image_meta" },
-            { _("Detailed list with metadata, no images"), "list_only_meta" },
-            { _("Detailed list with cover images and filenames"), "list_image_filename" },
-        }
         local sub_item_table = {}
-        for _, mode in ipairs(modes) do
-            local mode_label = mode[1]
-            local mode_key = mode[2]
+        for _, mode in ipairs(DISPLAY_MODES) do
+            local mode_key = mode[1]
             table.insert(sub_item_table, {
-                text = mode_label,
+                text = mode[2],
                 checked_func = function()
                     local dm = getDef("display_mode", function()
                         return _BookInfoManager:getSetting("filemanager_display_mode")
                     end)
-                    if mode_key == "classic" then
-                        return dm == nil or dm == "classic"
-                    end
+                    -- a memory spells classic out, CoverBrowser leaves it nil
+                    if dm == "classic" then dm = nil end
                     return dm == mode_key
                 end,
                 radio = true,
                 callback = function(touchmenu_instance)
-                    saveField("display_mode", mode_key)
+                    saveField("display_mode", mode_key or "classic")
                     if touchmenu_instance then touchmenu_instance:updateItems() end
                 end,
             })
@@ -446,16 +435,7 @@ function menu.buildDefaultConfigSubmenu(self)
                 local dm = getDef("display_mode", function()
                     return _BookInfoManager:getSetting("filemanager_display_mode")
                 end)
-                if dm == nil or dm == "classic" then
-                    return _("Display mode") .. ": " .. modes[1][1]
-                end
-                local names = {}
-                for _, mode in ipairs(modes) do
-                    if mode[2] ~= nil and mode[2] ~= "classic" then
-                        names[mode[2]] = mode[1]
-                    end
-                end
-                return _("Display mode") .. ": " .. (names[dm] or modes[1][1])
+                return _("Display mode") .. ": " .. displayModeLabel(dm)
             end,
             sub_item_table = sub_item_table,
         }
@@ -723,6 +703,138 @@ function menu.buildDefaultConfigSubmenu(self)
         if menu_items[id] then
             table.insert(sub_item_table, menu_items[id])
         end
+    end
+
+    return sub_item_table
+end
+
+-- ============================================================
+-- "Other views" submenu builder – edits KOReader's and
+-- CoverBrowser's GLOBAL settings, the ones History, Favorites,
+-- Collections, OPDS, Calibre and search results read.
+--
+-- Nothing here is saved per folder: every write runs under
+-- Memory._editing_global, so the auto-save hooks stay out and the
+-- value is not mirrored onto the file chooser either.
+-- ============================================================
+
+function menu.buildOtherViewsSubmenu(self)
+    -- Set the flag around a write and clear it once the synchronous hooks have
+    -- had their chance – the same pattern as editDefault above.
+    local function editGlobal(fn)
+        Memory._editing_global = true
+        fn()
+        UIManager:nextTick(function() Memory._editing_global = false end)
+    end
+
+    -- CoverBrowser's own entry point: saves the mode and re-patches the view it
+    -- belongs to. It is a plain function on the plugin class, hence the dot call.
+    local function setViewDisplayMode(widget_id, db_key, mode)
+        local coverbrowser = FileManager.instance and FileManager.instance.coverbrowser
+        editGlobal(function()
+            if coverbrowser and coverbrowser.setupWidgetDisplayMode then
+                coverbrowser.setupWidgetDisplayMode(widget_id, mode)
+            elseif _hasBookInfoManager then
+                _BookInfoManager:saveSetting(db_key, mode)
+            end
+        end)
+    end
+
+    local function buildViewModeSubmenu(widget_id, db_key)
+        local sub_item_table = {}
+        for _, mode in ipairs(DISPLAY_MODES) do
+            local mode_key = mode[1]
+            table.insert(sub_item_table, {
+                text = mode[2],
+                radio = true,
+                checked_func = function()
+                    return _BookInfoManager:getSetting(db_key) == mode_key
+                end,
+                callback = function()
+                    setViewDisplayMode(widget_id, db_key, mode_key)
+                end,
+            })
+        end
+        return sub_item_table
+    end
+
+    local fc = self.ui and self.ui.file_chooser
+
+    -- KOReader's own classic-mode setting. Unlike the per-folder entry in
+    -- "Configure this folder", this writes the global, which is why it is the
+    -- only one that reaches OPDS and Calibre – neither uses CoverBrowser.
+    local sub_item_table = {
+        {
+            keep_menu_open = true,
+            separator = true,
+            text_func = function()
+                local v = G_reader_settings:readSetting("items_per_page")
+                    or FileChooser.items_per_page_default
+                return T(_("Items per page for other views: %1"), v)
+            end,
+            help_text = _([[This sets the number of items per page in:
+- File browser, history and favorites in 'classic' display mode
+- Search results and folder shortcuts
+- File and folder selection
+- Calibre and OPDS browsers/search results
+
+It is a global setting, not saved per folder, so a folder with a saved value of its own keeps that one.]]),
+            callback = function(touchmenu_instance)
+                local default_value = FileChooser.items_per_page_default
+                local current_value = G_reader_settings:readSetting("items_per_page") or default_value
+                local widget = SpinWidget:new{
+                    title_text = _("Items per page"),
+                    value = current_value,
+                    value_min = 6,
+                    value_max = 30,
+                    default_value = default_value,
+                    keep_shown_on_apply = true,
+                    callback = function(spin)
+                        editGlobal(function()
+                            G_reader_settings:saveSetting("items_per_page", spin.value)
+                        end)
+                        if fc then fc:refreshPath() end
+                        if touchmenu_instance then touchmenu_instance:updateItems() end
+                    end,
+                }
+                UIManager:show(widget)
+            end,
+        },
+    }
+
+    if _hasBookInfoManager then
+        table.insert(sub_item_table, {
+            text = _("History display mode"),
+            help_text = _("Display mode used by the History and Favorites views. Not available while \"Use this mode everywhere\" is on."),
+            enabled_func = function()
+                return not _BookInfoManager:getSetting("unified_display_mode")
+            end,
+            sub_item_table = buildViewModeSubmenu("history", "history_display_mode"),
+        })
+        table.insert(sub_item_table, {
+            text = _("Collections display mode"),
+            help_text = _("Display mode used by the Collections view. Not available while \"Use this mode everywhere\" is on."),
+            enabled_func = function()
+                return not _BookInfoManager:getSetting("unified_display_mode")
+            end,
+            sub_item_table = buildViewModeSubmenu("collections", "collection_display_mode"),
+        })
+        table.insert(sub_item_table, {
+            keep_menu_open = true,
+            text = _("Use this mode everywhere"),
+            help_text = _("Copies the file browser's current display mode to History and Collections once, and disables their separate mode settings. Turning it off does not restore their previous modes."),
+            checked_func = function()
+                return _BookInfoManager:getSetting("unified_display_mode")
+            end,
+            callback = function(touchmenu_instance)
+                if _BookInfoManager:toggleSetting("unified_display_mode") then
+                    local mode = _BookInfoManager:getSetting("filemanager_display_mode")
+                    setViewDisplayMode("history", "history_display_mode", mode)
+                    setViewDisplayMode("collections", "collection_display_mode", mode)
+                end
+                if touchmenu_instance then touchmenu_instance:updateItems() end
+            end,
+        })
     end
 
     return sub_item_table
@@ -1327,11 +1439,23 @@ function menu.addToMainMenu(self, menu_items)
         keep_menu_open = true,
     })
 
-    -- Configure default settings (separate function – never touches KOReader live state)
+    -- Fallback for folders that have nothing of their own. Deliberately not
+    -- called "default settings": it is not a global default, and the group below
+    -- is. Own function – never touches KOReader live state.
     table.insert(menu_items.folder_memory.sub_item_table, {
-        text = _("Configure default settings"),
+        text = _("Default settings for folders"),
         separator = true,
+        help_text = _("Fallback for folders that have no saved settings of their own, and for History, Favorites and Collections when they are entered. It does not change KOReader's global settings, so it does not affect other views."),
         sub_item_table = menu.buildDefaultConfigSubmenu(self),
+    })
+
+    -- KOReader's/CoverBrowser's own global settings, the ones the views outside
+    -- the file browser read. Not saved per folder – see the builder.
+    table.insert(menu_items.folder_memory.sub_item_table, {
+        text = _("Global settings for other views"),
+        separator = true,
+        help_text = _("These change KOReader's global settings – the ones History, Favorites, Collections, OPDS, Calibre and search results read. They are not saved per folder."),
+        sub_item_table = menu.buildOtherViewsSubmenu(self),
     })
 
     -- Clear all folder memory
@@ -1339,7 +1463,7 @@ function menu.addToMainMenu(self, menu_items)
         text = _("Clear all saved folder settings"),
         callback = function()
             UIManager:show(ConfirmBox:new{
-                text = _("Clear all saved folder settings? Default settings will be kept if they exist."),
+                text = _("Clear all saved folder settings? The default settings for folders will be kept."),
                 ok_text = _("Clear all"),
                 ok_callback = function()
                     Memory.clearAll(true)

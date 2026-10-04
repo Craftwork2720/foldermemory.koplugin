@@ -49,6 +49,7 @@ function hooks.setupHooks()
     local function autoSave()
         if _applying then return end
         if Memory._editing_default then return end
+        if Memory._editing_global then return end
         local fm = FileManager.instance
         if not fm or not fm.file_chooser then return end
         local path = fm.file_chooser.path
@@ -61,6 +62,7 @@ function hooks.setupHooks()
     local function scheduleAutoSave()
         if _applying then return end
         if Memory._editing_default then return end
+        if Memory._editing_global then return end
         UIManager:nextTick(autoSave)
     end
 
@@ -163,12 +165,14 @@ function hooks.setupHooks()
     local orig_gs_save = G_reader_settings.saveSetting
     G_reader_settings.saveSetting = function(self, key, val, ...)
         orig_gs_save(self, key, val, ...)
-        if _gs_watch[key] then
+        if _gs_watch[key] and not Memory._editing_global then
             if key == "items_per_page" then
                 -- The plugin keeps the per-folder value as an override on the
                 -- file chooser, so a change made from KOReader's own classic
                 -- settings menu has to be mirrored onto it – otherwise that
                 -- override would shadow the change for the current folder.
+                -- Skipped for the plugin's own "Items per page for other views"
+                -- item, which sets the flag precisely to stay global.
                 local fm = FileManager.instance
                 if fm and fm.file_chooser then
                     fm.file_chooser.items_per_page = val
@@ -182,7 +186,7 @@ function hooks.setupHooks()
     if orig_gs_flip then
         G_reader_settings.flipNilOrFalse = function(self, key, ...)
             orig_gs_flip(self, key, ...)
-            if _boolean_watch[key] then
+            if _boolean_watch[key] and not Memory._editing_global then
                 scheduleAutoSave()
             end
         end

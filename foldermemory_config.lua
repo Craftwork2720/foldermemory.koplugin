@@ -47,6 +47,11 @@ Memory.inheritance_enabled = true
 -- to the __default__ entry and never leak to the current folder.
 Memory._editing_default = false
 
+-- Flag: true while editing a global setting from the "Global settings for other
+-- views" submenu. The auto-save hooks bail out, so the change stays global: it is
+-- neither mirrored onto the file chooser nor saved for the current folder.
+Memory._editing_global = false
+
 --- Initialize: load settings once, check optional modules
 function Memory.init()
     _settings = LuaSettings:open(SETTINGS_FILE)
