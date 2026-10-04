@@ -204,6 +204,9 @@ function hooks.setupHooks()
         _BookInfoManager.saveSetting = function(self, key, val, ...)
             orig_bim_save(self, key, val, ...)
             if _bim_watch[key] then
+                -- No need to mirror the value onto the file chooser: CoverBrowser's
+                -- own menu already sets it there before saving it here, and the
+                -- auto-save below then captures it from the instance.
                 scheduleAutoSave()
             end
         end

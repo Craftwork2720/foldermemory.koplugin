@@ -18,6 +18,18 @@ local DEFAULT_KEY = "__default__"
 -- Key name for inheritance flag
 local INHERITANCE_KEY = "__inheritance__"
 
+-- CoverBrowser settings that decide how many items fit on a page. KOReader keeps
+-- them in global settings shared with CoverBrowser's menus for History,
+-- Collections and the file searcher, so the plugin restores them on the file
+-- chooser instance instead of writing those globals (see applyFolderMemory).
+local GRID_FIELDS = {
+    "nb_cols_portrait",
+    "nb_rows_portrait",
+    "nb_cols_landscape",
+    "nb_rows_landscape",
+    "files_per_page",
+}
+
 local Memory = {}
 
 -- Cached settings instance (loaded once, flushed on write)
@@ -261,11 +273,11 @@ function Memory.captureCurrentSettings()
     -- nil in CoverBrowser means "classic" – store it explicitly as "classic"
     if _hasBookInfoManager then
         mem.display_mode = _BookInfoManager:getSetting("filemanager_display_mode") or "classic"
-        mem.nb_cols_portrait = _BookInfoManager:getSetting("nb_cols_portrait")
-        mem.nb_rows_portrait = _BookInfoManager:getSetting("nb_rows_portrait")
-        mem.nb_cols_landscape = _BookInfoManager:getSetting("nb_cols_landscape")
-        mem.nb_rows_landscape = _BookInfoManager:getSetting("nb_rows_landscape")
-        mem.files_per_page = _BookInfoManager:getSetting("files_per_page")
+        -- Grid settings: the file chooser carries the effective value (either the
+        -- per-folder override or, failing that, the global one).
+        for _, field in ipairs(GRID_FIELDS) do
+            mem[field] = (fc and fc[field]) or _BookInfoManager:getSetting(field)
+        end
     end
 
     -- Items per page in classic display mode. The file chooser may carry a
@@ -288,14 +300,20 @@ end
 
 --- Apply saved memory to the current state (global settings + instance)
 function Memory.applyFolderMemory(mem)
-    -- The per-folder items-per-page override has to be dropped even when this
-    -- folder has no memory at all, so it happens before the early return below.
-    -- It lives on the file chooser instance, because KOReader keeps this value
-    -- in a global setting that Collections, OPDS and search results read too:
-    -- writing the global would make all of them inherit the folder's value.
+    -- Per-folder overrides live on the file chooser instance rather than in the
+    -- global settings, because KOReader keeps these values globally and shares
+    -- them with Collections, OPDS, History and search results – writing them
+    -- there would make all of those inherit the last folder visited. They are
+    -- reset here, before the early returns below, so a folder with no memory –
+    -- or with no value for a given setting – falls back to the global one.
     local chooser = FileManager.instance and FileManager.instance.file_chooser
     if chooser then
         chooser.items_per_page = nil
+        if _hasBookInfoManager then
+            for _, field in ipairs(GRID_FIELDS) do
+                chooser[field] = _BookInfoManager:getSetting(field)
+            end
+        end
     end
 
     if not mem then return end
@@ -354,34 +372,17 @@ function Memory.applyFolderMemory(mem)
         chooser.items_per_page = mem.items_per_page
     end
 
-    -- Items per page (mosaic grid + list)
+    -- Items per page (mosaic grid + list): instance overrides only, so the
+    -- global CoverBrowser settings – and with them the menus of Collections,
+    -- History and the file searcher – keep the value the user set there.
     if not _hasBookInfoManager then return end
 
-    -- Helper: save to BookInfoManager and also update FileChooser class-level cache
-    local function applyGridSetting(key, val, filechooser_key)
-        if val ~= nil then
-            _BookInfoManager:saveSetting(key, val)
-            if filechooser_key then
-                FileChooser[filechooser_key] = val
+    if chooser then
+        for _, field in ipairs(GRID_FIELDS) do
+            if mem[field] ~= nil then
+                chooser[field] = mem[field]
             end
         end
-    end
-
-    applyGridSetting("nb_cols_portrait", mem.nb_cols_portrait, "nb_cols_portrait")
-    applyGridSetting("nb_rows_portrait", mem.nb_rows_portrait, "nb_rows_portrait")
-    applyGridSetting("nb_cols_landscape", mem.nb_cols_landscape, "nb_cols_landscape")
-    applyGridSetting("nb_rows_landscape", mem.nb_rows_landscape, "nb_rows_landscape")
-    applyGridSetting("files_per_page", mem.files_per_page, "files_per_page")
-
-    -- Also update the live file_chooser instance if it exists
-    local fm = FileManager.instance
-    if fm and fm.file_chooser then
-        local fc = fm.file_chooser
-        if mem.nb_cols_portrait ~= nil then fc.nb_cols_portrait = mem.nb_cols_portrait end
-        if mem.nb_rows_portrait ~= nil then fc.nb_rows_portrait = mem.nb_rows_portrait end
-        if mem.nb_cols_landscape ~= nil then fc.nb_cols_landscape = mem.nb_cols_landscape end
-        if mem.nb_rows_landscape ~= nil then fc.nb_rows_landscape = mem.nb_rows_landscape end
-        if mem.files_per_page ~= nil then fc.files_per_page = mem.files_per_page end
     end
 end
 

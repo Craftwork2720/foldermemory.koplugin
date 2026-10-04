@@ -904,19 +904,14 @@ function menu.buildConfigSubmenu(self)
                             fc.no_refresh_covers = true
                             fc:updateItems()
                         end
-                        _BookInfoManager:saveSetting("nb_cols_portrait", left_value)
-                        _BookInfoManager:saveSetting("nb_rows_portrait", right_value)
-                        FileChooser.nb_cols_portrait = left_value
-                        FileChooser.nb_rows_portrait = right_value
+                        -- Only the file chooser instance is written: the global
+                        -- CoverBrowser settings are shared with Collections,
+                        -- History and the file searcher.
                         saveFolderSettings()
                         if touchmenu_instance then touchmenu_instance:updateItems() end
                     end,
                     close_callback = function()
                         if fc.nb_cols_portrait ~= nb_cols or fc.nb_rows_portrait ~= nb_rows then
-                            _BookInfoManager:saveSetting("nb_cols_portrait", fc.nb_cols_portrait)
-                            _BookInfoManager:saveSetting("nb_rows_portrait", fc.nb_rows_portrait)
-                            FileChooser.nb_cols_portrait = fc.nb_cols_portrait
-                            FileChooser.nb_rows_portrait = fc.nb_rows_portrait
                             saveFolderSettings()
                             if fc.display_mode_type == "mosaic" and fc.portrait_mode then
                                 fc.no_refresh_covers = nil
@@ -961,19 +956,12 @@ function menu.buildConfigSubmenu(self)
                             fc.no_refresh_covers = true
                             fc:updateItems()
                         end
-                        _BookInfoManager:saveSetting("nb_cols_landscape", left_value)
-                        _BookInfoManager:saveSetting("nb_rows_landscape", right_value)
-                        FileChooser.nb_cols_landscape = left_value
-                        FileChooser.nb_rows_landscape = right_value
+                        -- Instance only – see the portrait mosaic item above.
                         saveFolderSettings()
                         if touchmenu_instance then touchmenu_instance:updateItems() end
                     end,
                     close_callback = function()
                         if fc.nb_cols_landscape ~= nb_cols or fc.nb_rows_landscape ~= nb_rows then
-                            _BookInfoManager:saveSetting("nb_cols_landscape", fc.nb_cols_landscape)
-                            _BookInfoManager:saveSetting("nb_rows_landscape", fc.nb_rows_landscape)
-                            FileChooser.nb_cols_landscape = fc.nb_cols_landscape
-                            FileChooser.nb_rows_landscape = fc.nb_rows_landscape
                             saveFolderSettings()
                             if fc.display_mode_type == "mosaic" and not fc.portrait_mode then
                                 fc.no_refresh_covers = nil
@@ -1008,15 +996,12 @@ function menu.buildConfigSubmenu(self)
                             fc.no_refresh_covers = true
                             fc:updateItems()
                         end
-                        _BookInfoManager:saveSetting("files_per_page", spin.value)
-                        FileChooser.files_per_page = spin.value
+                        -- Instance only – see the portrait mosaic item above.
                         saveFolderSettings()
                         if touchmenu_instance then touchmenu_instance:updateItems() end
                     end,
                     close_callback = function()
                         if fc.files_per_page ~= files_per_page_val then
-                            _BookInfoManager:saveSetting("files_per_page", fc.files_per_page)
-                            FileChooser.files_per_page = fc.files_per_page
                             saveFolderSettings()
                             if fc.display_mode_type == "list" then
                                 fc.no_refresh_covers = nil

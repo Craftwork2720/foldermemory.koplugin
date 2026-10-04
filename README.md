@@ -34,8 +34,7 @@ A global `__default__` template is auto-created from your current KOReader setti
 
 - **Auto-save** — any change you make to sort, display mode, grid, or book status filter via KOReader's native menus or the Folder Memory menu is automatically captured and saved for the current folder.
 - **Seamless restore** — settings are applied automatically when entering a folder
-- **History, Favorites, Collections** — use the mosaic/list Items per page from the default template
-- **No global side effects** — classic mode's items per page is remembered per folder without touching KOReader's global setting, so Collections, OPDS and search results keep using their own value instead of inheriting the last folder you visited
+- **No global side effects** — items per page (including classic mode) and the mosaic grid are remembered per folder without touching KOReader's global settings. Collections, OPDS, History and search results keep their own values instead of inheriting the settings of the last folder you visited.
 
 ## Installation
 
