@@ -825,6 +825,11 @@ It is a global setting, not saved per folder, so a folder with a saved value of 
         local function setGridSetting(key, val)
             editGlobal(function()
                 _BookInfoManager:saveSetting(key, val)
+                -- CoverBrowser's own menu keeps this class-level copy in step as
+                -- well, and it is what a freshly built file chooser falls back to
+                -- before the plugin has applied anything – a stale copy here is
+                -- what showed an old value until KOReader was restarted.
+                FileChooser[key] = val
             end)
         end
 

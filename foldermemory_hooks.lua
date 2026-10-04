@@ -71,28 +71,37 @@ function hooks.setupHooks()
     -- fire as a side-effect of restoring settings.
     -- ============================================================
     local orig_apply = Memory.applyFolderMemory
-    Memory.applyFolderMemory = function(mem)
+    Memory.applyFolderMemory = function(mem, chooser)
         _applying = true
-        local ok, err = pcall(orig_apply, mem)
+        local ok, err = pcall(orig_apply, mem, chooser)
         _applying = false
         if not ok then error(err, 2) end
     end
 
     -- ============================================================
-    -- Helper: apply folder memory for a given path, but only if
-    -- the path actually changed.
+    -- Helper: apply folder memory for a given path, but only when
+    -- something changed: the folder, or the file chooser itself.
     -- ============================================================
+    -- The chooser the last apply went to. A new one – reopening the file manager
+    -- after a book builds both from scratch – starts with no per-folder values,
+    -- so it needs the memory again even when the folder is the same; and its very
+    -- first refresh happens inside its own init, before FileManager has published
+    -- it, which is why the caller passes it in rather than being looked up.
+    -- Only ever holds one chooser, replaced on every apply.
+    local last_applied_chooser = nil
+
     -- Returns true when a memory was applied, so a caller that had to defer the
     -- apply can tell whether the list needs drawing again.
-    local function applyMemoryIfNeeded(path)
+    local function applyMemoryIfNeeded(path, chooser)
         if _applying then return false end
-        if path and path ~= lastAppliedPath then
+        if path and (path ~= lastAppliedPath or chooser ~= last_applied_chooser) then
             lastAppliedPath = path
+            last_applied_chooser = chooser
             local mem = Memory.getFolderMemory(path)
             -- Called even when there is no memory for this folder: it also
             -- clears the per-folder items-per-page override, so the folder
             -- falls back to KOReader's global value.
-            Memory.applyFolderMemory(mem)
+            Memory.applyFolderMemory(mem, chooser)
             return true
         end
         return false
@@ -131,12 +140,15 @@ function hooks.setupHooks()
             if not _startup_done then
                 UIManager:nextTick(function()
                     _startup_done = true
-                    if applyMemoryIfNeeded(path) then
+                    if applyMemoryIfNeeded(path, self) then
                         redrawFileChooser()
                     end
                 end)
             else
-                applyMemoryIfNeeded(path)
+                -- `self` is the chooser about to be drawn. Passing it matters for
+                -- a freshly built one, which refreshes from its own init while
+                -- FileManager has not published it yet.
+                applyMemoryIfNeeded(path, self)
             end
         end
         local ok, err = pcall(orig_refreshPath, self)
@@ -158,12 +170,12 @@ function hooks.setupHooks()
             if not _startup_done then
                 UIManager:nextTick(function()
                     _startup_done = true
-                    if applyMemoryIfNeeded(path) then
+                    if applyMemoryIfNeeded(path, self.file_chooser) then
                         redrawFileChooser()
                     end
                 end)
             else
-                applyMemoryIfNeeded(path)
+                applyMemoryIfNeeded(path, self.file_chooser)
             end
         end
         local ok, err = pcall(orig_onRefresh, self)
@@ -255,8 +267,8 @@ function hooks.setupHooks()
 
     -- Reset fingerprint after every apply so Hook 5 won't fire.
     local orig_apply_wrapped = Memory.applyFolderMemory
-    Memory.applyFolderMemory = function(mem)
-        orig_apply_wrapped(mem)
+    Memory.applyFolderMemory = function(mem, chooser)
+        orig_apply_wrapped(mem, chooser)
         _lastFilterFP = filterFingerprint()
     end
 

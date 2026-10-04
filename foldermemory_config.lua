@@ -294,14 +294,17 @@ function Memory.captureCurrentSettings()
 end
 
 --- Apply saved memory to the current state (global settings + instance)
-function Memory.applyFolderMemory(mem)
+--- The chooser can be passed in by a caller that has it while FileManager has
+--- not published it yet: a freshly built one runs its first refreshPath inside
+--- its own init, before FileManager.instance.file_chooser is set.
+function Memory.applyFolderMemory(mem, chooser)
     -- Per-folder overrides live on the file chooser instance rather than in the
     -- global settings, because KOReader keeps these values globally and shares
     -- them with Collections, OPDS, History and search results – writing them
     -- there would make all of those inherit the last folder visited. They are
     -- reset here, before the early returns below, so a folder with no memory –
     -- or with no value for a given setting – falls back to the global one.
-    local chooser = FileManager.instance and FileManager.instance.file_chooser
+    chooser = chooser or (FileManager.instance and FileManager.instance.file_chooser)
     if chooser then
         chooser.items_per_page = nil
         if _hasBookInfoManager then
