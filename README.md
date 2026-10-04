@@ -46,7 +46,7 @@ From the file browser, open the menu (top-left) → **Folder memory**:
 
 | Menu item | Description |
 |-----------|-------------|
-| **Configure this folder** | Edit sort, display mode, items per page, and book status filter for the current folder. Changes are saved automatically and applied immediately. |
+| **Configure this folder** | Open a settings window for the current folder: sort, display mode, items per page, and book status filter. Changes are saved automatically and applied immediately. The Dispatcher action below opens the same window. |
 | **Clear saved settings for this folder** | Remove the current folder's saved settings — it will inherit from parent folders or fall back to defaults. |
 | **Inherit settings from parent folders** | Toggle inheritance on/off. When off, folders without their own settings skip ancestors and go directly to the default template. |
 | **Configure default settings** | Edit the `__default__` template. These changes never affect your current folder — they only define the fallback for unconfigured folders and virtual views. |

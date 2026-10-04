@@ -1099,12 +1099,11 @@ end
 -- ============================================================
 -- Standalone config window
 --
--- Used by the Dispatcher action so a gesture can open the same
--- settings as "Configure this folder", as a popup window instead
--- of a menu page. The item table built by buildConfigSubmenu is
--- rendered as dialog buttons: items with a sub_item_table open a
--- second window holding the choices, the others run their
--- callback in place.
+-- Opened by the "Configure this folder" menu item and by the Dispatcher
+-- action, so a gesture can reach it too. The item table built by
+-- buildConfigSubmenu is rendered as dialog buttons: items with a
+-- sub_item_table open a second window holding the choices, the others
+-- run their callback in place.
 -- ============================================================
 
 -- Text of a TouchMenu-style item; used for the titles of the choice windows.
@@ -1274,13 +1273,15 @@ function menu.addToMainMenu(self, menu_items)
         sub_item_table = {},
     }
 
-    -- Config this folder (nested submenu)
+    -- Config this folder – opens the same popup window the gesture action does
     table.insert(menu_items.folder_memory.sub_item_table, {
         text = _("Configure this folder"),
         enabled_func = function()
             return self.ui.file_chooser and self.ui.file_chooser.path ~= nil
         end,
-        sub_item_table = menu.buildConfigSubmenu(self),
+        callback = function()
+            menu.showConfigMenu(self)
+        end,
     })
 
     -- Clear saved settings for this folder
