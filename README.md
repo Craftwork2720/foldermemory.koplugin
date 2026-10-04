@@ -19,7 +19,7 @@ When you navigate into a folder, **FolderMemory** remembers and restores:
 - **Folders and files mixed** toggle
 - **Book status filter** (new, reading, abandoned, complete, or any combination)
 - **Display mode**: classic (filenames only), mosaic (cover images or text covers), detailed list (with images, metadata, or filenames)
-- **Items per page**: mosaic grid columns × rows (portrait and landscape), list mode files per page
+- **Items per page**: mosaic grid columns × rows (portrait and landscape), list mode files per page — the menu only offers the entries that apply to the current display mode
 
 ### Inheritance from parent folders
 If a folder has no saved settings of its own, the plugin walks up the directory tree and uses the nearest ancestor's settings. If none is found, it falls back to a global default template you can configure.
@@ -51,6 +51,10 @@ From the file browser, open the menu (top-left) → **Folder memory**:
 | **Inherit settings from parent folders** | Toggle inheritance on/off. When off, folders without their own settings skip ancestors and go directly to the default template. |
 | **Configure default settings** | Edit the `__default__` template. These changes never affect your current folder — they only define the fallback for unconfigured folders and virtual views. |
 | **Clear all saved folder settings** | Remove all per-folder memory. The default template is preserved. |
+
+### Gesture shortcut
+
+**Configure this folder** is also registered as a Dispatcher action, so you can bind it to a gesture: *Settings → Taps and gestures → Gesture manager*, pick a gesture, then choose **File browser → Folder memory: configure this folder**. The gesture opens a settings window for the folder you are currently browsing — no need to go through the menu. Settings with several choices (sort order, book status, display mode) open a second window listing them.
 
 ## Compatibility
 

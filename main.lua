@@ -26,6 +26,8 @@ local UIManager = require("ui/uimanager")
 local WidgetContainer = require("ui/widget/container/widgetcontainer")
 local FileChooser = require("ui/widget/filechooser")
 local FileManager = require("apps/filemanager/filemanager")
+local Dispatcher = require("dispatcher")
+local _ = require("gettext")
 local logger = require("logger")
 
 local Memory = require("foldermemory_config")
@@ -42,7 +44,27 @@ function FolderMemory:init()
     Memory.init()
     self.ui.menu:registerToMainMenu(self)
     hooks.setupHooks()
+    -- Register the Dispatcher action so a gesture can open the config menu
+    self:onDispatcherRegisterActions()
     logger.dbg("FolderMemory: plugin loaded – per-folder sort/display/filter/grid memory enabled")
+end
+
+-- ============================================================
+-- Dispatcher – gest otwierający "Configure this folder"
+-- ============================================================
+
+function FolderMemory:onDispatcherRegisterActions()
+    Dispatcher:registerAction("folder_memory_configure", {
+        category = "none",
+        event = "FolderMemoryConfigure",
+        title = _("Folder memory: configure this folder"),
+        filemanager = true,
+    })
+end
+
+-- Wywoływane przez gest (Dispatcher → Event "FolderMemoryConfigure")
+function FolderMemory:onFolderMemoryConfigure()
+    menu.showConfigMenu(self)
 end
 
 -- ============================================================

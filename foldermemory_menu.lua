@@ -8,6 +8,8 @@ local ConfirmBox = require("ui/widget/confirmbox")
 local InfoMessage = require("ui/widget/infomessage")
 local FileChooser = require("ui/widget/filechooser")
 local FileManager = require("apps/filemanager/filemanager")
+local ButtonDialog = require("ui/widget/buttondialog")
+local Screen = require("device").screen
 local _ = require("gettext")
 local T = require("ffi/util").template
 local util = require("util")
@@ -31,6 +33,14 @@ do
 end
 
 local menu = {}
+
+-- Which "items per page" settings apply to a CoverBrowser display mode:
+-- the mosaic grid for the mosaic modes, files per page for the list modes,
+-- nothing for classic (which uses KOReader's own items_per_page setting).
+-- CoverBrowser derives the same value as display_mode without the suffix.
+local function displayModeType(mode)
+    return (mode or "classic"):gsub("_.*", "") -- "mosaic", "list" or "classic"
+end
 
 -- +--------------------------------------------+
 -- | Helper: build book status filter submenu   |
@@ -647,6 +657,21 @@ function menu.buildDefaultConfigSubmenu(self)
                 UIManager:show(widget)
             end,
         }
+
+        -- Offer only the "items per page" entries that apply to the display
+        -- mode being configured: mosaic grid for the mosaic modes, files per
+        -- page for the list modes. Classic mode uses KOReader's own
+        -- "Items per page" setting, which the plugin does not manage.
+        local mode_type = displayModeType(getDef("display_mode", function()
+            return _BookInfoManager:getSetting("filemanager_display_mode")
+        end))
+        if mode_type ~= "mosaic" then
+            menu_items.mosaic_portrait_grid = nil
+            menu_items.mosaic_landscape_grid = nil
+        end
+        if mode_type ~= "list" then
+            menu_items.files_per_page = nil
+        end
     end
 
     -- Build the sub_item_table from menu_items, in order
@@ -945,6 +970,19 @@ function menu.buildConfigSubmenu(self)
                 UIManager:show(widget)
             end,
         }
+
+        -- Offer only the "items per page" entries that apply to the current
+        -- display mode: mosaic grid for the mosaic modes, files per page for
+        -- the list modes. Classic mode uses KOReader's own "Items per page"
+        -- setting, which the plugin does not manage.
+        local mode_type = displayModeType(_BookInfoManager:getSetting("filemanager_display_mode"))
+        if mode_type ~= "mosaic" then
+            menu_items.mosaic_portrait_grid = nil
+            menu_items.mosaic_landscape_grid = nil
+        end
+        if mode_type ~= "list" then
+            menu_items.files_per_page = nil
+        end
     end
 
     -- +-----------------------------------+
@@ -991,6 +1029,163 @@ function menu.buildConfigSubmenu(self)
     end
 
     return sub_item_table
+end
+
+-- ============================================================
+-- Standalone config window
+--
+-- Used by the Dispatcher action so a gesture can open the same
+-- settings as "Configure this folder", as a popup window instead
+-- of a menu page. The item table built by buildConfigSubmenu is
+-- rendered as dialog buttons: items with a sub_item_table open a
+-- second window holding the choices, the others run their
+-- callback in place.
+-- ============================================================
+
+-- Text of a TouchMenu-style item; used for the titles of the choice windows.
+-- The buttons themselves get the item's text_func, which Button re-evaluates.
+local function itemText(item)
+    return item.text_func and item.text_func() or item.text
+end
+
+function menu.showConfigMenu(self)
+    local fc = self.ui and self.ui.file_chooser
+    if not fc or not fc.path then
+        -- The action is classified as "filemanager", but gestures are global:
+        -- the same gesture can also fire in the reader, where there is no folder.
+        UIManager:show(InfoMessage:new{
+            text = _("Folder memory: open a folder in the file browser first."),
+        })
+        return
+    end
+
+    -- Windows on screen: the settings one, plus the choice list opened from it.
+    local main, picker
+    local showWindow, showMain, built_mode
+    local refresh_scheduled = false
+
+    local function currentMode()
+        if not _hasBookInfoManager then return "classic" end
+        return _BookInfoManager:getSetting("filemanager_display_mode") or "classic"
+    end
+
+    -- The callbacks below were written for TouchMenu: they expect to be handed
+    -- the menu instance and may call updateItems() on it. Redraw on the next
+    -- event loop tick, so the button handling the tap is not freed under its
+    -- own feet (Button keeps painting itself after the callback returns).
+    local function refresh()
+        if refresh_scheduled then return end
+        refresh_scheduled = true
+        UIManager:nextTick(function()
+            refresh_scheduled = false
+            local redrawn = false
+            if main and not main.closed then
+                if built_mode ~= currentMode() then
+                    -- The display mode changed, and with it which "items per
+                    -- page" entries apply: rebuild the window.
+                    showMain()
+                else
+                    main.dialog:reinit()
+                end
+                redrawn = true
+            end
+            if picker and not picker.closed then
+                picker.dialog:reinit()
+                redrawn = true
+            end
+            if redrawn then
+                -- Rebuilding changes the window size (it shrinks to its widest
+                -- button), so repaint every window instead of just this one.
+                UIManager:setDirty("all", "ui")
+            end
+        end)
+    end
+
+    local proxy = {
+        updateItems = refresh,
+        closeMenu = function() end,
+    }
+
+    showWindow = function(title, items, is_picker)
+        local entry = { closed = false }
+
+        local function dismiss()
+            if entry.closed then return end
+            entry.closed = true
+            UIManager:close(entry.dialog)
+            if main == entry then main = nil end
+            if picker == entry then picker = nil end
+        end
+
+        local rows = {}
+        for _, item in ipairs(items) do
+            local button = {
+                text = item.text,
+                text_func = item.text_func,
+                checked_func = item.checked_func,
+                enabled_func = item.enabled_func,
+                -- we redraw the whole window ourselves, after the tap is over
+                no_refresh_checkmark = true,
+                menu_style = true,
+                align = "left",
+            }
+            if item.sub_item_table then
+                button.callback = function()
+                    picker = showWindow(itemText(item), item.sub_item_table, true)
+                end
+            elseif item.callback then
+                button.callback = function()
+                    item.callback(proxy)
+                    if is_picker then
+                        dismiss() -- a picked value closes its list
+                    end
+                    -- the settings window below shows the value just changed
+                    refresh()
+                end
+            end
+            if item.hold_callback then
+                button.hold_callback = function()
+                    item.hold_callback(proxy)
+                    refresh()
+                end
+            end
+            table.insert(rows, { button })
+            if item.separator then
+                table.insert(rows, {}) -- rendered as a separator line
+            end
+        end
+
+        entry.dialog = ButtonDialog:new{
+            title = title,
+            title_align = "center",
+            use_info_style = false,
+            shrink_unneeded_width = true,
+            shrink_min_width = math.floor(0.6 * Screen:getWidth()),
+            buttons = rows,
+            -- the window can also be dismissed by tapping outside of it
+            tap_close_callback = function()
+                entry.closed = true
+                if main == entry then main = nil end
+                if picker == entry then picker = nil end
+            end,
+        }
+        UIManager:show(entry.dialog)
+        return entry
+    end
+
+    -- (Re)build the settings window from the current state. The item table is
+    -- built anew because the display mode decides which entries it holds.
+    showMain = function()
+        if main and not main.closed then
+            main.closed = true
+            UIManager:close(main.dialog)
+            main = nil
+        end
+        built_mode = currentMode()
+        main = showWindow(T(_("Folder memory: %1"), fc.path), menu.buildConfigSubmenu(self), false)
+    end
+
+    showMain()
 end
 
 -- ============================================================
