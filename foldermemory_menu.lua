@@ -10,6 +10,9 @@ local FileChooser = require("ui/widget/filechooser")
 local FileManager = require("apps/filemanager/filemanager")
 local ButtonDialog = require("ui/widget/buttondialog")
 local Screen = require("device").screen
+local Font = require("ui/font")
+local TextWidget = require("ui/widget/textwidget")
+local Menu = require("ui/widget/menu")
 local _ = require("gettext")
 local T = require("ffi/util").template
 local util = require("util")
@@ -1274,6 +1277,46 @@ local function itemText(item)
     return item.text_func and item.text_func() or item.text
 end
 
+-- Rows of KOReader's own menus carry a mark on the left: a checkbox (a ✓ in a
+-- ▢) for toggles, a radio (◉/◯) for single choices. A dialog button can only
+-- hold text, so the mark becomes a text prefix – the same glyphs the menu uses –
+-- and the slot it takes is replicated with spaces for the rows that have none,
+-- so that every label starts at the same place.
+local CHECK_ON, CHECK_OFF = "✓ ", "▢ "
+local RADIO_ON, RADIO_OFF = "◉ ", "◯ "
+local no_mark_prefix = nil
+
+local function noMarkPrefix()
+    if no_mark_prefix == nil then
+        -- "menu_style" buttons draw their label with this face and size
+        local face = Font:getFace("smallinfofont", 22)
+        local box = TextWidget:new{ text = CHECK_OFF, face = face }
+        local space = TextWidget:new{ text = " ", face = face }
+        local n = 1
+        if space:getSize().w > 0 then
+            n = math.max(1, math.floor(box:getSize().w / space:getSize().w + 0.5))
+        end
+        box:free()
+        space:free()
+        no_mark_prefix = string.rep(" ", n)
+    end
+    return no_mark_prefix
+end
+
+-- Label of a config window row: KOReader's own item text – which appends the ▸
+-- arrow to the entries that open a sub-list – preceded by the mark, if any.
+local function rowLabel(item)
+    local mark = noMarkPrefix()
+    if item.checked_func then
+        if item.radio then
+            mark = item.checked_func() and RADIO_ON or RADIO_OFF
+        else
+            mark = item.checked_func() and CHECK_ON or CHECK_OFF
+        end
+    end
+    return mark .. Menu.getMenuText(item)
+end
+
 function menu.showConfigMenu(self)
     local fc = self.ui and self.ui.file_chooser
     if not fc or not fc.path then
@@ -1351,12 +1394,10 @@ function menu.showConfigMenu(self)
         local rows = {}
         for _, item in ipairs(items) do
             local button = {
-                text = item.text,
-                text_func = item.text_func,
-                checked_func = item.checked_func,
+                -- the mark and the sub-list arrow are baked into the label, so
+                -- Button adds no checkmark of its own – see rowLabel
+                text_func = function() return rowLabel(item) end,
                 enabled_func = item.enabled_func,
-                -- we redraw the whole window ourselves, after the tap is over
-                no_refresh_checkmark = true,
                 menu_style = true,
                 align = "left",
             }
