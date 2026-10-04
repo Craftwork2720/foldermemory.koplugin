@@ -19,7 +19,7 @@ When you navigate into a folder, **FolderMemory** remembers and restores:
 - **Folders and files mixed** toggle
 - **Book status filter** (new, reading, abandoned, complete, or any combination)
 - **Display mode**: classic (filenames only), mosaic (cover images or text covers), detailed list (with images, metadata, or filenames)
-- **Items per page**: mosaic grid columns × rows (portrait and landscape), list mode files per page, and classic mode items per page — the menu only offers the entries that apply to the current display mode and to the orientation the device is held in
+- **Items per page**: mosaic grid columns × rows (portrait and landscape), list mode files per page, and classic mode items per page. **Configure this folder** only offers the entries that apply to the current display mode and to the orientation the device is held in; **Configure default settings** always lists them all, since the template describes folders as they may be later
 
 ### Inheritance from parent folders
 If a folder has no saved settings of its own, the plugin walks up the directory tree and uses the nearest ancestor's settings. If none is found, it falls back to a global default template you can configure.

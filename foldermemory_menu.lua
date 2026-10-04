@@ -664,71 +664,46 @@ function menu.buildDefaultConfigSubmenu(self)
             end,
         }
 
-        -- Offer only the "items per page" entries that apply to the display
-        -- mode being configured and to the orientation the device is held in:
-        -- mosaic grid for the mosaic modes, files per page for the list modes.
-        -- Classic mode has its own entry instead, built further down.
-        local mode_type = displayModeType(getDef("display_mode", function()
-            return _BookInfoManager:getSetting("filemanager_display_mode")
-        end))
-        if mode_type == "mosaic" then
-            if isPortrait() then
-                menu_items.mosaic_landscape_grid = nil
-            else
-                menu_items.mosaic_portrait_grid = nil
-            end
-        else
-            menu_items.mosaic_portrait_grid = nil
-            menu_items.mosaic_landscape_grid = nil
-        end
-        if mode_type ~= "list" then
-            menu_items.files_per_page = nil
-        end
+        -- Unlike the per-folder submenu, the template keeps every entry: it
+        -- describes folders as they may be later, so it must not depend on the
+        -- display mode or the orientation in effect right now.
     end
 
-    -- Classic display mode uses KOReader's own "Items per page" setting. The
-    -- template is only offered for it when the mode being configured is classic.
+    -- Classic display mode uses KOReader's own "Items per page" setting. Offered
+    -- by the template like the entries above, whatever the current mode is.
     do
-        local mode_type = "classic"
-        if _hasBookInfoManager then
-            mode_type = displayModeType(getDef("display_mode", function()
-                return _BookInfoManager:getSetting("filemanager_display_mode")
-            end))
+        -- Effective value of the live setting, used as the fallback when the
+        -- template carries no value of its own.
+        local liveItemsPerPage = function()
+            local live = self.ui.file_chooser
+            return (live and live.items_per_page) or G_reader_settings:readSetting("items_per_page")
         end
-        if mode_type == "classic" then
-            -- Effective value of the live setting, used as the fallback when the
-            -- template carries no value of its own.
-            local liveItemsPerPage = function()
-                local live = self.ui.file_chooser
-                return (live and live.items_per_page) or G_reader_settings:readSetting("items_per_page")
-            end
-            menu_items.items_per_page_classic = {
-                keep_menu_open = true,
-                separator = true,
-                text_func = function()
-                    local v = getDef("items_per_page", liveItemsPerPage)
-                        or FileChooser.items_per_page_default
-                    return T(_("Items per page in classic mode: %1"), v)
-                end,
-                callback = function(touchmenu_instance)
-                    local default_value = FileChooser.items_per_page_default
-                    local current_value = getDef("items_per_page", liveItemsPerPage) or default_value
-                    local widget = SpinWidget:new{
-                        title_text = _("Items per page"),
-                        value = current_value,
-                        value_min = 6,
-                        value_max = 30,
-                        default_value = default_value,
-                        keep_shown_on_apply = true,
-                        callback = function(spin)
-                            saveField("items_per_page", spin.value)
-                            if touchmenu_instance then touchmenu_instance:updateItems() end
-                        end,
-                    }
-                    UIManager:show(widget)
-                end,
-            }
-        end
+        menu_items.items_per_page_classic = {
+            keep_menu_open = true,
+            separator = true,
+            text_func = function()
+                local v = getDef("items_per_page", liveItemsPerPage)
+                    or FileChooser.items_per_page_default
+                return T(_("Items per page in classic mode: %1"), v)
+            end,
+            callback = function(touchmenu_instance)
+                local default_value = FileChooser.items_per_page_default
+                local current_value = getDef("items_per_page", liveItemsPerPage) or default_value
+                local widget = SpinWidget:new{
+                    title_text = _("Items per page"),
+                    value = current_value,
+                    value_min = 6,
+                    value_max = 30,
+                    default_value = default_value,
+                    keep_shown_on_apply = true,
+                    callback = function(spin)
+                        saveField("items_per_page", spin.value)
+                        if touchmenu_instance then touchmenu_instance:updateItems() end
+                    end,
+                }
+                UIManager:show(widget)
+            end,
+        }
     end
 
     -- Build the sub_item_table from menu_items, in order
