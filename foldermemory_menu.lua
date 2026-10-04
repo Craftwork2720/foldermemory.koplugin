@@ -832,6 +832,8 @@ function menu.buildConfigSubmenu(self)
     -- +--------------------+
     menu_items.book_status = menu.buildBookStatusMenuTable(self, refresh, saveFolderSettings)
     menu_items.book_status.separator = true
+    -- Several statuses can be on at once, so its choice list stays open
+    menu_items.book_status.multi_select = true
 
     -- +--------------------+
     -- | 5. Display mode    |
@@ -1175,7 +1177,7 @@ function menu.showConfigMenu(self)
         closeMenu = function() end,
     }
 
-    showWindow = function(title, items, is_picker)
+    showWindow = function(title, items, is_picker, multi_select)
         local entry = { closed = false }
 
         local function dismiss()
@@ -1200,13 +1202,15 @@ function menu.showConfigMenu(self)
             }
             if item.sub_item_table then
                 button.callback = function()
-                    picker = showWindow(itemText(item), item.sub_item_table, true)
+                    picker = showWindow(itemText(item), item.sub_item_table, true, item.multi_select)
                 end
             elseif item.callback then
                 button.callback = function()
                     item.callback(proxy)
-                    if is_picker then
-                        dismiss() -- a picked value closes its list
+                    if is_picker and not multi_select then
+                        -- A single-choice list is done with; a multi-select one
+                        -- stays open so several entries can be picked in a row.
+                        dismiss()
                     end
                     -- the settings window below shows the value just changed
                     refresh()
