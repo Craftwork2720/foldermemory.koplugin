@@ -9,10 +9,16 @@ local InfoMessage = require("ui/widget/infomessage")
 local FileChooser = require("ui/widget/filechooser")
 local FileManager = require("apps/filemanager/filemanager")
 local ButtonDialog = require("ui/widget/buttondialog")
+local CheckButton = require("ui/widget/checkbutton")
 local Screen = require("device").screen
 local Font = require("ui/font")
-local TextWidget = require("ui/widget/textwidget")
 local Menu = require("ui/widget/menu")
+local Geom = require("ui/geometry")
+local Size = require("ui/size")
+local Blitbuffer = require("ffi/blitbuffer")
+local LineWidget = require("ui/widget/linewidget")
+local VerticalGroup = require("ui/widget/verticalgroup")
+local VerticalSpan = require("ui/widget/verticalspan")
 local _ = require("gettext")
 local T = require("ffi/util").template
 local util = require("util")
@@ -1330,46 +1336,6 @@ local function itemText(item)
     return item.text_func and item.text_func() or item.text
 end
 
--- Rows of KOReader's own menus carry a mark on the left: a checkbox (a ✓ in a
--- ▢) for toggles, a radio (◉/◯) for single choices. A dialog button can only
--- hold text, so the mark becomes a text prefix – the same glyphs the menu uses –
--- and the slot it takes is replicated with spaces for the rows that have none,
--- so that every label starts at the same place.
-local CHECK_ON, CHECK_OFF = "✓ ", "▢ "
-local RADIO_ON, RADIO_OFF = "◉ ", "◯ "
-local no_mark_prefix = nil
-
-local function noMarkPrefix()
-    if no_mark_prefix == nil then
-        -- "menu_style" buttons draw their label with this face and size
-        local face = Font:getFace("smallinfofont", 22)
-        local box = TextWidget:new{ text = CHECK_OFF, face = face }
-        local space = TextWidget:new{ text = " ", face = face }
-        local n = 1
-        if space:getSize().w > 0 then
-            n = math.max(1, math.floor(box:getSize().w / space:getSize().w + 0.5))
-        end
-        box:free()
-        space:free()
-        no_mark_prefix = string.rep(" ", n)
-    end
-    return no_mark_prefix
-end
-
--- Label of a config window row: KOReader's own item text – which appends the ▸
--- arrow to the entries that open a sub-list – preceded by the mark, if any.
-local function rowLabel(item)
-    local mark = noMarkPrefix()
-    if item.checked_func then
-        if item.radio then
-            mark = item.checked_func() and RADIO_ON or RADIO_OFF
-        else
-            mark = item.checked_func() and CHECK_ON or CHECK_OFF
-        end
-    end
-    return mark .. Menu.getMenuText(item)
-end
-
 function menu.showConfigMenu(self)
     local fc = self.ui and self.ui.file_chooser
     if not fc or not fc.path then
@@ -1412,17 +1378,17 @@ function menu.showConfigMenu(self)
                     -- which "items per page" entries apply: rebuild the window.
                     showMain()
                 else
-                    main.dialog:reinit()
+                    main.rebuild()
                 end
                 redrawn = true
             end
             if picker and not picker.closed then
-                picker.dialog:reinit()
+                picker.rebuild()
                 redrawn = true
             end
             if redrawn then
-                -- Rebuilding changes the window size (it shrinks to its widest
-                -- button), so repaint every window instead of just this one.
+                -- A rebuilt window can be a different height – a label may now
+                -- wrap – so repaint every window instead of just this one.
                 UIManager:setDirty("all", "ui")
             end
         end)
@@ -1444,51 +1410,71 @@ function menu.showConfigMenu(self)
             if picker == entry then picker = nil end
         end
 
-        local rows = {}
-        for _, item in ipairs(items) do
-            local button = {
-                -- the mark and the sub-list arrow are baked into the label, so
-                -- Button adds no checkmark of its own – see rowLabel
-                text_func = function() return rowLabel(item) end,
-                enabled_func = item.enabled_func,
-                menu_style = true,
-                align = "left",
-            }
-            if item.sub_item_table then
-                button.callback = function()
-                    picker = showWindow(itemText(item), item.sub_item_table, true, item.multi_select)
-                end
-            elseif item.callback then
-                button.callback = function()
-                    item.callback(proxy)
-                    if is_picker and not multi_select then
-                        -- A single-choice list is done with; a multi-select one
-                        -- stays open so several entries can be picked in a row.
-                        dismiss()
-                    end
-                    -- the settings window below shows the value just changed
-                    refresh()
+        -- Rows are widgets, not dialog buttons: a button holds text only, while
+        -- CheckButton carries the mark the menu uses – a CheckMark for toggles,
+        -- a RadioMark for single choices, and an empty slot of the same width
+        -- when the row has neither, so every label starts at the same place.
+        -- It also highlights on tap and supports a hold callback.
+        local dialog
+        local function buildRows()
+            local row_width = dialog:getAddedWidgetAvailableWidth()
+            local vgroup = VerticalGroup:new{ align = "center" }
+            for _, item in ipairs(items) do
+                table.insert(vgroup, CheckButton:new{
+                    parent = dialog,
+                    width = row_width,
+                    face = Font:getFace("smallinfofont"),
+                    -- KOReader's own label, with the ▸ arrow on the entries that
+                    -- open a sub-list
+                    text = Menu.getMenuText(item),
+                    checkable = item.checked_func ~= nil,
+                    radio = item.radio or false,
+                    checked = item.checked_func ~= nil and item.checked_func() or false,
+                    enabled = item.enabled_func == nil or item.enabled_func() ~= false,
+                    callback = function()
+                        if item.sub_item_table then
+                            picker = showWindow(itemText(item), item.sub_item_table, true, item.multi_select)
+                        elseif item.callback then
+                            item.callback(proxy)
+                            if is_picker and not multi_select then
+                                -- A single-choice list is done with; a multi-select
+                                -- one stays open so several can be picked in a row.
+                                dismiss()
+                            end
+                            -- the settings window below shows the value just changed
+                            refresh()
+                        end
+                    end,
+                    hold_callback = item.hold_callback and function()
+                        item.hold_callback(proxy)
+                        refresh()
+                    end or nil,
+                })
+                if item.separator then
+                    table.insert(vgroup, VerticalSpan:new{ width = Size.padding.default })
+                    table.insert(vgroup, LineWidget:new{
+                        dimen = Geom:new{ w = row_width, h = Size.line.medium },
+                        background = Blitbuffer.COLOR_GRAY,
+                    })
+                    table.insert(vgroup, VerticalSpan:new{ width = Size.padding.default })
                 end
             end
-            if item.hold_callback then
-                button.hold_callback = function()
-                    item.hold_callback(proxy)
-                    refresh()
-                end
-            end
-            table.insert(rows, { button })
-            if item.separator then
-                table.insert(rows, {}) -- rendered as a separator line
-            end
+            return vgroup
         end
 
-        entry.dialog = ButtonDialog:new{
+        dialog = ButtonDialog:new{
             title = title,
             title_align = "center",
             use_info_style = false,
-            shrink_unneeded_width = true,
-            shrink_min_width = math.floor(0.6 * Screen:getWidth()),
-            buttons = rows,
+            -- ButtonDialog measures its content width off its buttons, so this
+            -- one is not just convenient: with no buttons the rows above would
+            -- be laid out at a width of zero.
+            buttons = { {
+                {
+                    text = _("Close"),
+                    callback = function() dismiss() end,
+                },
+            } },
             -- the window can also be dismissed by tapping outside of it
             tap_close_callback = function()
                 entry.closed = true
@@ -1496,7 +1482,19 @@ function menu.showConfigMenu(self)
                 if picker == entry then picker = nil end
             end,
         }
-        UIManager:show(entry.dialog)
+        dialog:addWidget(buildRows())
+
+        -- Redraw in place. The rows read the values they stand for when they are
+        -- built, so a redraw means building them again – and swapping them in
+        -- directly, since addWidget() can only ever append.
+        entry.rebuild = function()
+            if entry.closed then return end
+            dialog._added_widgets = { buildRows() }
+            dialog:reinit()
+        end
+
+        entry.dialog = dialog
+        UIManager:show(dialog)
         return entry
     end
 
