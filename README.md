@@ -54,7 +54,7 @@ From the file browser, open the menu (top-left) → **Folder memory**:
 | **Clear saved settings for this folder** | Remove the current folder's saved settings — it will inherit from parent folders or fall back to defaults. |
 | **Inherit settings from parent folders** | Toggle inheritance on/off. When off, folders without their own settings skip ancestors and go directly to the default template. |
 | **Default settings for folders** | Edit the `__default__` template. These changes never affect your current folder — they only define the fallback for folders without saved settings of their own, and for virtual views. They do not change KOReader's global settings. |
-| **Global settings for other views** | Edit KOReader's and CoverBrowser's global settings — the ones History, Favorites, Collections, OPDS, Calibre and search results read: items per page (the only one that reaches OPDS and Calibre, which do not use CoverBrowser), the display mode of History and Collections, and the "use this mode everywhere" toggle. Deliberately not saved per folder, so a folder with its own saved value keeps it. |
+| **Global settings for other views** | Edit KOReader's and CoverBrowser's global settings — the ones History, Favorites, Collections, OPDS, Calibre and search results read: items per page (the only one that reaches OPDS and Calibre, which do not use CoverBrowser), the mosaic and detailed-list grid, the display mode of History and Collections, and the "use this mode everywhere" toggle. Deliberately not saved per folder, so a folder with its own saved value keeps it. |
 | **Clear all saved folder settings** | Remove all per-folder memory. The default settings for folders are preserved. |
 
 ### Gesture shortcut

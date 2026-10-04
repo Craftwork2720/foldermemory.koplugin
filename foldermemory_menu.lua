@@ -760,13 +760,16 @@ function menu.buildOtherViewsSubmenu(self)
 
     local fc = self.ui and self.ui.file_chooser
 
+    -- Shared by the grid entries below. They are for the views outside the file
+    -- browser; the file browser itself follows the folder's own settings.
+    local grid_help = _("Used by the mosaic and detailed-list modes of History, Favorites, Collections and search results. The file browser follows each folder's own settings – Configure this folder – or the default settings for folders. This is a global setting and is not saved per folder.")
+
     -- KOReader's own classic-mode setting. Unlike the per-folder entry in
     -- "Configure this folder", this writes the global, which is why it is the
     -- only one that reaches OPDS and Calibre – neither uses CoverBrowser.
     local sub_item_table = {
         {
             keep_menu_open = true,
-            separator = true,
             text_func = function()
                 local v = G_reader_settings:readSetting("items_per_page")
                     or FileChooser.items_per_page_default
@@ -803,6 +806,112 @@ It is a global setting, not saved per folder, so a folder with a saved value of 
     }
 
     if _hasBookInfoManager then
+        -- CoverBrowser's own grid settings. Written to the globals only: the
+        -- file browser's copy lives on its instance and is reset per folder.
+        local function setGridSetting(key, val)
+            editGlobal(function()
+                _BookInfoManager:saveSetting(key, val)
+            end)
+        end
+
+        table.insert(sub_item_table, {
+            keep_menu_open = true,
+            text_func = function()
+                local cols = _BookInfoManager:getSetting("nb_cols_portrait") or 3
+                local rows = _BookInfoManager:getSetting("nb_rows_portrait") or 3
+                return T(_("Items per page in portrait mosaic mode: %1 × %2"), cols, rows)
+            end,
+            help_text = grid_help,
+            callback = function(touchmenu_instance)
+                local nb_cols = _BookInfoManager:getSetting("nb_cols_portrait") or 3
+                local nb_rows = _BookInfoManager:getSetting("nb_rows_portrait") or 3
+                local widget = DoubleSpinWidget:new{
+                    title_text = _("Portrait mosaic mode"),
+                    width_factor = 0.6,
+                    left_text = _("Columns"),
+                    left_value = nb_cols,
+                    left_min = 2,
+                    left_max = 8,
+                    left_default = 3,
+                    left_precision = "%01d",
+                    right_text = _("Rows"),
+                    right_value = nb_rows,
+                    right_min = 2,
+                    right_max = 8,
+                    right_default = 3,
+                    right_precision = "%01d",
+                    keep_shown_on_apply = true,
+                    callback = function(left_value, right_value)
+                        setGridSetting("nb_cols_portrait", left_value)
+                        setGridSetting("nb_rows_portrait", right_value)
+                        if touchmenu_instance then touchmenu_instance:updateItems() end
+                    end,
+                }
+                UIManager:show(widget)
+            end,
+        })
+        table.insert(sub_item_table, {
+            keep_menu_open = true,
+            text_func = function()
+                local cols = _BookInfoManager:getSetting("nb_cols_landscape") or 4
+                local rows = _BookInfoManager:getSetting("nb_rows_landscape") or 2
+                return T(_("Items per page in landscape mosaic mode: %1 × %2"), cols, rows)
+            end,
+            help_text = grid_help,
+            callback = function(touchmenu_instance)
+                local nb_cols = _BookInfoManager:getSetting("nb_cols_landscape") or 4
+                local nb_rows = _BookInfoManager:getSetting("nb_rows_landscape") or 2
+                local widget = DoubleSpinWidget:new{
+                    title_text = _("Landscape mosaic mode"),
+                    width_factor = 0.6,
+                    left_text = _("Columns"),
+                    left_value = nb_cols,
+                    left_min = 2,
+                    left_max = 8,
+                    left_default = 4,
+                    left_precision = "%01d",
+                    right_text = _("Rows"),
+                    right_value = nb_rows,
+                    right_min = 2,
+                    right_max = 8,
+                    right_default = 2,
+                    right_precision = "%01d",
+                    keep_shown_on_apply = true,
+                    callback = function(left_value, right_value)
+                        setGridSetting("nb_cols_landscape", left_value)
+                        setGridSetting("nb_rows_landscape", right_value)
+                        if touchmenu_instance then touchmenu_instance:updateItems() end
+                    end,
+                }
+                UIManager:show(widget)
+            end,
+        })
+        table.insert(sub_item_table, {
+            keep_menu_open = true,
+            separator = true,
+            text_func = function()
+                local v = _BookInfoManager:getSetting("files_per_page") or 10
+                return T(_("Items per page in portrait list mode: %1"), v)
+            end,
+            help_text = grid_help,
+            callback = function(touchmenu_instance)
+                local files_per_page = _BookInfoManager:getSetting("files_per_page") or 10
+                local widget = SpinWidget:new{
+                    title_text = _("Portrait list mode"),
+                    value = files_per_page,
+                    value_min = 4,
+                    value_max = 20,
+                    default_value = 10,
+                    keep_shown_on_apply = true,
+                    callback = function(spin)
+                        setGridSetting("files_per_page", spin.value)
+                        if touchmenu_instance then touchmenu_instance:updateItems() end
+                    end,
+                }
+                UIManager:show(widget)
+            end,
+        })
+
         table.insert(sub_item_table, {
             text = _("History display mode"),
             help_text = _("Display mode used by the History and Favorites views. Not available while \"Use this mode everywhere\" is on."),
