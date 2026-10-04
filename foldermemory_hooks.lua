@@ -82,8 +82,10 @@ function hooks.setupHooks()
     -- Helper: apply folder memory for a given path, but only if
     -- the path actually changed.
     -- ============================================================
+    -- Returns true when a memory was applied, so a caller that had to defer the
+    -- apply can tell whether the list needs drawing again.
     local function applyMemoryIfNeeded(path)
-        if _applying then return end
+        if _applying then return false end
         if path and path ~= lastAppliedPath then
             lastAppliedPath = path
             local mem = Memory.getFolderMemory(path)
@@ -91,7 +93,9 @@ function hooks.setupHooks()
             -- clears the per-folder items-per-page override, so the folder
             -- falls back to KOReader's global value.
             Memory.applyFolderMemory(mem)
+            return true
         end
+        return false
     end
 
     -- ============================================================
@@ -106,13 +110,30 @@ function hooks.setupHooks()
     local _startup_done = false
 
     local orig_refreshPath = FileChooser.refreshPath
+
+    -- Draw the file list again after an apply that had to be deferred. The list
+    -- was drawn while the *previous* settings were still in effect, so without
+    -- this the folder shown at startup would keep them until the next
+    -- navigation. The raw original is called: this is only a redraw.
+    local function redrawFileChooser()
+        local fm = FileManager.instance
+        local fc = fm and fm.file_chooser
+        if not fc then return end
+        local ok, err = pcall(orig_refreshPath, fc)
+        if not ok then
+            logger.warn("FolderMemory: redraw after startup apply failed:", err)
+        end
+    end
+
     FileChooser.refreshPath = function(self)
         if self.name == "filemanager" then
             local path = self.path
             if not _startup_done then
                 UIManager:nextTick(function()
                     _startup_done = true
-                    applyMemoryIfNeeded(path)
+                    if applyMemoryIfNeeded(path) then
+                        redrawFileChooser()
+                    end
                 end)
             else
                 applyMemoryIfNeeded(path)
@@ -137,7 +158,9 @@ function hooks.setupHooks()
             if not _startup_done then
                 UIManager:nextTick(function()
                     _startup_done = true
-                    applyMemoryIfNeeded(path)
+                    if applyMemoryIfNeeded(path) then
+                        redrawFileChooser()
+                    end
                 end)
             else
                 applyMemoryIfNeeded(path)
