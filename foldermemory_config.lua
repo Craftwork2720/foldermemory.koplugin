@@ -293,16 +293,6 @@ function Memory.captureCurrentSettings()
     return mem
 end
 
---- Apply __default__ template memory (used when entering virtual views
---- like History, Favorites, Collections – no real folder path available).
-function Memory.applyDefaultMemory()
-    if not _settings then Memory.init() end
-    local def = _settings:readSetting(DEFAULT_KEY)
-    if type(def) == "table" and next(def) ~= nil then
-        Memory.applyFolderMemory(def)
-    end
-end
-
 --- Apply saved memory to the current state (global settings + instance)
 function Memory.applyFolderMemory(mem)
     -- Per-folder overrides live on the file chooser instance rather than in the

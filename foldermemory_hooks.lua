@@ -39,7 +39,6 @@ function hooks.setupHooks()
     -- (restore triggers hooks → hooks would re-save → pointless).
     -- ============================================================
     local _applying = false
-    local _force_apply = false
 
     -- ============================================================
     -- Core auto-save: capture + persist current settings for the
@@ -81,12 +80,11 @@ function hooks.setupHooks()
 
     -- ============================================================
     -- Helper: apply folder memory for a given path, but only if
-    -- the path actually changed (or _force_apply is set).
+    -- the path actually changed.
     -- ============================================================
     local function applyMemoryIfNeeded(path)
         if _applying then return end
-        if path and (path ~= lastAppliedPath or _force_apply) then
-            _force_apply = false
+        if path and path ~= lastAppliedPath then
             lastAppliedPath = path
             local mem = Memory.getFolderMemory(path)
             -- Called even when there is no memory for this folder: it also
@@ -253,109 +251,6 @@ function hooks.setupHooks()
         orig_refreshPath2(self)
     end
 
-    -- ============================================================
-    -- Virtual views (History, Favorites, Collections)
-    -- ============================================================
-
-    -- Called when entering a virtual view:
-    -- applies __default__ and resets tracking so the real folder's
-    -- settings will be re-applied on return.
-    local function onEnterVirtualView()
-        _force_apply = true
-        lastAppliedPath = nil
-        Memory.applyDefaultMemory()
-    end
-
-    -- Called when a virtual view widget closes:
-    -- forces Hook 1 to re-apply the real folder's memory by
-    -- calling refreshPath with tracking flags reset.
-    local function onExitVirtualView()
-        UIManager:nextTick(function()
-            local fm = FileManager.instance
-            if not fm or not fm.file_chooser then return end
-            local path = fm.file_chooser.path
-            if not path then return end
-            -- Reset tracking – Hook 1 (via refreshPath) will pick this up
-            -- and call applyMemoryIfNeeded BEFORE re-rendering the list,
-            -- ensuring G_reader_settings + CoverBrowser are up-to-date.
-            lastAppliedPath = nil
-            _force_apply = true
-            local ok, err = pcall(function()
-                fm.file_chooser:refreshPath()
-            end)
-            if not ok then
-                logger.warn("FolderMemory: onExitVirtualView refreshPath failed:", err)
-            end
-        end)
-    end
-
-    -- Wrap a widget's close points so onExitVirtualView fires when
-    -- the virtual view is dismissed.  Tries both close_callback
-    -- (Menu-style) and the onClose method (Widget-style).
-    local function hookWidgetClose(widget)
-        if not widget then return end
-        -- close_callback (preferred – used by KOReader's Menu widget)
-        if type(widget.close_callback) == "function" then
-            local orig_cb = widget.close_callback
-            widget.close_callback = function(...)
-                orig_cb(...)
-                onExitVirtualView()
-            end
-        end
-        -- onClose method (fallback for other widget types)
-        if type(widget.onClose) == "function" then
-            local orig_onClose = widget.onClose
-            widget.onClose = function(w, ...)
-                local r = orig_onClose(w, ...)
-                onExitVirtualView()
-                return r
-            end
-        end
-    end
-
-    -- --------------------------------------------------------
-    -- History: onShowHist
-    -- Uses self.booklist_menu (BookList widget).
-    -- --------------------------------------------------------
-    local FileManagerHistory = require("apps/filemanager/filemanagerhistory")
-    if FileManagerHistory then
-        local orig_onShowHist = FileManagerHistory.onShowHist
-        FileManagerHistory.onShowHist = function(self, ...)
-            onEnterVirtualView()
-            if orig_onShowHist then
-                orig_onShowHist(self, ...)
-            end
-            hookWidgetClose(self.booklist_menu)
-        end
-    end
-
-    -- --------------------------------------------------------
-    -- Collections: onShowColl / onShowCollList
-    -- onShowColl also covers Favorites (default collection) –
-    -- there is no separate Favorites module.
-    -- onShowColl     → self.booklist_menu (BookList)
-    -- onShowCollList → self.coll_list (Menu with collection list)
-    -- --------------------------------------------------------
-    local FileManagerCollection = require("apps/filemanager/filemanagercollection")
-    if FileManagerCollection then
-        local orig_onShowColl = FileManagerCollection.onShowColl
-        FileManagerCollection.onShowColl = function(self, ...)
-            onEnterVirtualView()
-            if orig_onShowColl then
-                orig_onShowColl(self, ...)
-            end
-            hookWidgetClose(self.booklist_menu)
-        end
-
-        local orig_onShowCollList = FileManagerCollection.onShowCollList
-        FileManagerCollection.onShowCollList = function(self, ...)
-            onEnterVirtualView()
-            if orig_onShowCollList then
-                orig_onShowCollList(self, ...)
-            end
-            hookWidgetClose(self.coll_list)
-        end
-    end
 end
 
 return hooks
