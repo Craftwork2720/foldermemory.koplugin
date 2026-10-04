@@ -727,37 +727,6 @@ function menu.buildOtherViewsSubmenu(self)
         UIManager:nextTick(function() Memory._editing_global = false end)
     end
 
-    -- CoverBrowser's own entry point: saves the mode and re-patches the view it
-    -- belongs to. It is a plain function on the plugin class, hence the dot call.
-    local function setViewDisplayMode(widget_id, db_key, mode)
-        local coverbrowser = FileManager.instance and FileManager.instance.coverbrowser
-        editGlobal(function()
-            if coverbrowser and coverbrowser.setupWidgetDisplayMode then
-                coverbrowser.setupWidgetDisplayMode(widget_id, mode)
-            elseif _hasBookInfoManager then
-                _BookInfoManager:saveSetting(db_key, mode)
-            end
-        end)
-    end
-
-    local function buildViewModeSubmenu(widget_id, db_key)
-        local sub_item_table = {}
-        for _, mode in ipairs(DISPLAY_MODES) do
-            local mode_key = mode[1]
-            table.insert(sub_item_table, {
-                text = mode[2],
-                radio = true,
-                checked_func = function()
-                    return _BookInfoManager:getSetting(db_key) == mode_key
-                end,
-                callback = function()
-                    setViewDisplayMode(widget_id, db_key, mode_key)
-                end,
-            })
-        end
-        return sub_item_table
-    end
-
     local fc = self.ui and self.ui.file_chooser
 
     -- Shared by the grid entries below. They are for the views outside the file
@@ -767,9 +736,13 @@ function menu.buildOtherViewsSubmenu(self)
     -- KOReader's own classic-mode setting. Unlike the per-folder entry in
     -- "Configure this folder", this writes the global, which is why it is the
     -- only one that reaches OPDS and Calibre – neither uses CoverBrowser.
+    -- The display modes of those views are not offered here: KOReader keeps them
+    -- together with the mode radios, in Settings → Display mode, where "use this
+    -- mode everywhere" has a mode to refer to.
     local sub_item_table = {
         {
             keep_menu_open = true,
+            separator = true,
             text_func = function()
                 local v = G_reader_settings:readSetting("items_per_page")
                     or FileChooser.items_per_page_default
@@ -888,7 +861,6 @@ It is a global setting, not saved per folder, so a folder with a saved value of 
         })
         table.insert(sub_item_table, {
             keep_menu_open = true,
-            separator = true,
             text_func = function()
                 local v = _BookInfoManager:getSetting("files_per_page") or 10
                 return T(_("Items per page in portrait list mode: %1"), v)
@@ -909,39 +881,6 @@ It is a global setting, not saved per folder, so a folder with a saved value of 
                     end,
                 }
                 UIManager:show(widget)
-            end,
-        })
-
-        table.insert(sub_item_table, {
-            text = _("History display mode"),
-            help_text = _("Display mode used by the History and Favorites views. Not available while \"Use this mode everywhere\" is on."),
-            enabled_func = function()
-                return not _BookInfoManager:getSetting("unified_display_mode")
-            end,
-            sub_item_table = buildViewModeSubmenu("history", "history_display_mode"),
-        })
-        table.insert(sub_item_table, {
-            text = _("Collections display mode"),
-            help_text = _("Display mode used by the Collections view. Not available while \"Use this mode everywhere\" is on."),
-            enabled_func = function()
-                return not _BookInfoManager:getSetting("unified_display_mode")
-            end,
-            sub_item_table = buildViewModeSubmenu("collections", "collection_display_mode"),
-        })
-        table.insert(sub_item_table, {
-            keep_menu_open = true,
-            text = _("Use this mode everywhere"),
-            help_text = _("Copies the file browser's current display mode to History and Collections once, and disables their separate mode settings. Turning it off does not restore their previous modes."),
-            checked_func = function()
-                return _BookInfoManager:getSetting("unified_display_mode")
-            end,
-            callback = function(touchmenu_instance)
-                if _BookInfoManager:toggleSetting("unified_display_mode") then
-                    local mode = _BookInfoManager:getSetting("filemanager_display_mode")
-                    setViewDisplayMode("history", "history_display_mode", mode)
-                    setViewDisplayMode("collections", "collection_display_mode", mode)
-                end
-                if touchmenu_instance then touchmenu_instance:updateItems() end
             end,
         })
     end
