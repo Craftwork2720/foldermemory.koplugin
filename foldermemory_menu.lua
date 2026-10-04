@@ -36,8 +36,8 @@ local menu = {}
 
 -- Which "items per page" settings apply to a CoverBrowser display mode:
 -- the mosaic grid for the mosaic modes, files per page for the list modes,
--- nothing for classic (which uses KOReader's own items_per_page setting).
--- CoverBrowser derives the same value as display_mode without the suffix.
+-- KOReader's own items_per_page for classic. CoverBrowser derives the same
+-- value by stripping the suffix off display_mode.
 local function displayModeType(mode)
     return (mode or "classic"):gsub("_.*", "") -- "mosaic", "list" or "classic"
 end
@@ -667,8 +667,7 @@ function menu.buildDefaultConfigSubmenu(self)
         -- Offer only the "items per page" entries that apply to the display
         -- mode being configured and to the orientation the device is held in:
         -- mosaic grid for the mosaic modes, files per page for the list modes.
-        -- Classic mode uses KOReader's own "Items per page" setting, which the
-        -- plugin does not manage.
+        -- Classic mode has its own entry instead, built further down.
         local mode_type = displayModeType(getDef("display_mode", function()
             return _BookInfoManager:getSetting("filemanager_display_mode")
         end))
@@ -687,6 +686,51 @@ function menu.buildDefaultConfigSubmenu(self)
         end
     end
 
+    -- Classic display mode uses KOReader's own "Items per page" setting. The
+    -- template is only offered for it when the mode being configured is classic.
+    do
+        local mode_type = "classic"
+        if _hasBookInfoManager then
+            mode_type = displayModeType(getDef("display_mode", function()
+                return _BookInfoManager:getSetting("filemanager_display_mode")
+            end))
+        end
+        if mode_type == "classic" then
+            -- Effective value of the live setting, used as the fallback when the
+            -- template carries no value of its own.
+            local liveItemsPerPage = function()
+                local live = self.ui.file_chooser
+                return (live and live.items_per_page) or G_reader_settings:readSetting("items_per_page")
+            end
+            menu_items.items_per_page_classic = {
+                keep_menu_open = true,
+                separator = true,
+                text_func = function()
+                    local v = getDef("items_per_page", liveItemsPerPage)
+                        or FileChooser.items_per_page_default
+                    return T(_("Items per page in classic mode: %1"), v)
+                end,
+                callback = function(touchmenu_instance)
+                    local default_value = FileChooser.items_per_page_default
+                    local current_value = getDef("items_per_page", liveItemsPerPage) or default_value
+                    local widget = SpinWidget:new{
+                        title_text = _("Items per page"),
+                        value = current_value,
+                        value_min = 6,
+                        value_max = 30,
+                        default_value = default_value,
+                        keep_shown_on_apply = true,
+                        callback = function(spin)
+                            saveField("items_per_page", spin.value)
+                            if touchmenu_instance then touchmenu_instance:updateItems() end
+                        end,
+                    }
+                    UIManager:show(widget)
+                end,
+            }
+        end
+    end
+
     -- Build the sub_item_table from menu_items, in order
     local order = {
         "sort_by",
@@ -697,6 +741,7 @@ function menu.buildDefaultConfigSubmenu(self)
         "mosaic_portrait_grid",
         "mosaic_landscape_grid",
         "files_per_page",
+        "items_per_page_classic",
     }
     local sub_item_table = {}
     for _, id in ipairs(order) do
@@ -987,8 +1032,7 @@ function menu.buildConfigSubmenu(self)
         -- Offer only the "items per page" entries that apply to the current
         -- display mode and to the orientation the device is held in: mosaic
         -- grid for the mosaic modes, files per page for the list modes.
-        -- Classic mode uses KOReader's own "Items per page" setting, which the
-        -- plugin does not manage.
+        -- Classic mode has its own entry instead, built further down.
         local mode_type = displayModeType(_BookInfoManager:getSetting("filemanager_display_mode"))
         if mode_type == "mosaic" then
             if isPortrait() then
@@ -1003,6 +1047,46 @@ function menu.buildConfigSubmenu(self)
         if mode_type ~= "list" then
             menu_items.files_per_page = nil
         end
+    end
+
+    -- Classic display mode: KOReader's "Items per page" setting. The per-folder
+    -- value is kept as an override on the file chooser instance, never in the
+    -- global setting – Collections, OPDS and search results read the global one
+    -- and would otherwise inherit the settings of the last folder visited.
+    local classic_mode = true
+    if _hasBookInfoManager then
+        classic_mode = displayModeType(_BookInfoManager:getSetting("filemanager_display_mode")) == "classic"
+    end
+    if classic_mode then
+        local fc = self.ui.file_chooser
+        local function currentValue()
+            return fc.items_per_page or G_reader_settings:readSetting("items_per_page")
+                or FileChooser.items_per_page_default
+        end
+        menu_items.items_per_page_classic = {
+            keep_menu_open = true,
+            separator = true,
+            text_func = function()
+                return T(_("Items per page in classic mode: %1"), currentValue())
+            end,
+            callback = function(touchmenu_instance)
+                local widget = SpinWidget:new{
+                    title_text = _("Items per page"),
+                    value = currentValue(),
+                    value_min = 6,
+                    value_max = 30,
+                    default_value = FileChooser.items_per_page_default,
+                    keep_shown_on_apply = true,
+                    callback = function(spin)
+                        fc.items_per_page = spin.value
+                        saveFolderSettings()
+                        refresh()
+                        if touchmenu_instance then touchmenu_instance:updateItems() end
+                    end,
+                }
+                UIManager:show(widget)
+            end,
+        }
     end
 
     -- +-----------------------------------+
@@ -1039,6 +1123,7 @@ function menu.buildConfigSubmenu(self)
         "mosaic_portrait_grid",
         "mosaic_landscape_grid",
         "files_per_page",
+        "items_per_page_classic",
         "clear_settings",
     }
     local sub_item_table = {}

@@ -268,6 +268,11 @@ function Memory.captureCurrentSettings()
         mem.files_per_page = _BookInfoManager:getSetting("files_per_page")
     end
 
+    -- Items per page in classic display mode. The file chooser may carry a
+    -- per-folder override (see applyFolderMemory); otherwise KOReader's global
+    -- setting is in effect.
+    mem.items_per_page = (fc and fc.items_per_page) or G_reader_settings:readSetting("items_per_page")
+
     return mem
 end
 
@@ -283,6 +288,16 @@ end
 
 --- Apply saved memory to the current state (global settings + instance)
 function Memory.applyFolderMemory(mem)
+    -- The per-folder items-per-page override has to be dropped even when this
+    -- folder has no memory at all, so it happens before the early return below.
+    -- It lives on the file chooser instance, because KOReader keeps this value
+    -- in a global setting that Collections, OPDS and search results read too:
+    -- writing the global would make all of them inherit the folder's value.
+    local chooser = FileManager.instance and FileManager.instance.file_chooser
+    if chooser then
+        chooser.items_per_page = nil
+    end
+
     if not mem then return end
 
     -- Sort by
@@ -327,6 +342,16 @@ function Memory.applyFolderMemory(mem)
             local dm = (mem.display_mode == "classic") and nil or mem.display_mode
             ui.coverbrowser:setDisplayMode(dm)
         end
+    end
+
+    -- Items per page in classic mode: set on the file chooser instance only, so
+    -- the global setting – and with it Collections, OPDS and search results –
+    -- stays untouched. Folders in another display mode keep the override
+    -- cleared, since the value does not affect their file list at all.
+    -- Sits before the CoverBrowser guard below, classic mode not needing it.
+    if chooser and mem.items_per_page ~= nil
+            and (mem.display_mode == nil or mem.display_mode == "classic") then
+        chooser.items_per_page = mem.items_per_page
     end
 
     -- Items per page (mosaic grid + list)

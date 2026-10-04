@@ -19,7 +19,7 @@ When you navigate into a folder, **FolderMemory** remembers and restores:
 - **Folders and files mixed** toggle
 - **Book status filter** (new, reading, abandoned, complete, or any combination)
 - **Display mode**: classic (filenames only), mosaic (cover images or text covers), detailed list (with images, metadata, or filenames)
-- **Items per page**: mosaic grid columns × rows (portrait and landscape), list mode files per page — the menu only offers the entries that apply to the current display mode and to the orientation the device is held in
+- **Items per page**: mosaic grid columns × rows (portrait and landscape), list mode files per page, and classic mode items per page — the menu only offers the entries that apply to the current display mode and to the orientation the device is held in
 
 ### Inheritance from parent folders
 If a folder has no saved settings of its own, the plugin walks up the directory tree and uses the nearest ancestor's settings. If none is found, it falls back to a global default template you can configure.
@@ -34,7 +34,8 @@ A global `__default__` template is auto-created from your current KOReader setti
 
 - **Auto-save** — any change you make to sort, display mode, grid, or book status filter via KOReader's native menus or the Folder Memory menu is automatically captured and saved for the current folder.
 - **Seamless restore** — settings are applied automatically when entering a folder
-- **History, Favorites, Collections** — use the Items per page from default template
+- **History, Favorites, Collections** — use the mosaic/list Items per page from the default template
+- **No global side effects** — classic mode's items per page is remembered per folder without touching KOReader's global setting, so Collections, OPDS and search results keep using their own value instead of inheriting the last folder you visited
 
 ## Installation
 
@@ -46,7 +47,7 @@ From the file browser, open the menu (top-left) → **Folder memory**:
 
 | Menu item | Description |
 |-----------|-------------|
-| **Configure this folder** | Edit sort, display mode, grid, and book status filter for the current folder. Changes are saved automatically and applied immediately. |
+| **Configure this folder** | Edit sort, display mode, items per page, and book status filter for the current folder. Changes are saved automatically and applied immediately. |
 | **Clear saved settings for this folder** | Remove the current folder's saved settings — it will inherit from parent folders or fall back to defaults. |
 | **Inherit settings from parent folders** | Toggle inheritance on/off. When off, folders without their own settings skip ancestors and go directly to the default template. |
 | **Configure default settings** | Edit the `__default__` template. These changes never affect your current folder — they only define the fallback for unconfigured folders and virtual views. |

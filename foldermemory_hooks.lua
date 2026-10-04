@@ -87,9 +87,10 @@ function hooks.setupHooks()
             _force_apply = false
             lastAppliedPath = path
             local mem = Memory.getFolderMemory(path)
-            if mem then
-                Memory.applyFolderMemory(mem)
-            end
+            -- Called even when there is no memory for this folder: it also
+            -- clears the per-folder items-per-page override, so the folder
+            -- falls back to KOReader's global value.
+            Memory.applyFolderMemory(mem)
         end
     end
 
@@ -153,15 +154,26 @@ function hooks.setupHooks()
     -- ============================================================
 
     -- --------------------------------------------------------
-    -- Hook 3: G_reader_settings – collate / reverse / mixed
+    -- Hook 3: G_reader_settings – collate / reverse / mixed /
+    -- items per page (classic display mode)
     -- --------------------------------------------------------
-    local _collate_watch  = { collate = true }
+    local _gs_watch       = { collate = true, items_per_page = true }
     local _boolean_watch  = { reverse_collate = true, collate_mixed = true }
 
     local orig_gs_save = G_reader_settings.saveSetting
     G_reader_settings.saveSetting = function(self, key, val, ...)
         orig_gs_save(self, key, val, ...)
-        if _collate_watch[key] then
+        if _gs_watch[key] then
+            if key == "items_per_page" then
+                -- The plugin keeps the per-folder value as an override on the
+                -- file chooser, so a change made from KOReader's own classic
+                -- settings menu has to be mirrored onto it – otherwise that
+                -- override would shadow the change for the current folder.
+                local fm = FileManager.instance
+                if fm and fm.file_chooser then
+                    fm.file_chooser.items_per_page = val
+                end
+            end
             scheduleAutoSave()
         end
     end
