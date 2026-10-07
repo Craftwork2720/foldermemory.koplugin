@@ -90,10 +90,8 @@ function hooks.setupHooks()
     -- Only ever holds one chooser, replaced on every apply.
     local last_applied_chooser = nil
 
-    -- Returns true when a memory was applied, so a caller that had to defer the
-    -- apply can tell whether the list needs drawing again.
     local function applyMemoryIfNeeded(path, chooser)
-        if _applying then return false end
+        if _applying then return end
         if path and (path ~= lastAppliedPath or chooser ~= last_applied_chooser) then
             lastAppliedPath = path
             last_applied_chooser = chooser
@@ -102,9 +100,7 @@ function hooks.setupHooks()
             -- clears the per-folder items-per-page override, so the folder
             -- falls back to KOReader's global value.
             Memory.applyFolderMemory(mem, chooser)
-            return true
         end
-        return false
     end
 
     -- ============================================================
@@ -112,44 +108,17 @@ function hooks.setupHooks()
     -- Covers normal navigation: changeToPath, onFolderUp, goHome
     -- (changeToPath calls refreshPath after setting self.path)
     -- ============================================================
-    -- On the very first call (startup), defer to nextTick so that
-    -- CoverBrowser has time to finish initializing before we try
-    -- to set the display mode. Subsequent calls run synchronously
-    -- *before* orig_refreshPath to avoid a visible flicker.
-    local _startup_done = false
-
     local orig_refreshPath = FileChooser.refreshPath
 
-    -- Draw the file list again after an apply that had to be deferred. The list
-    -- was drawn while the *previous* settings were still in effect, so without
-    -- this the folder shown at startup would keep them until the next
-    -- navigation. The raw original is called: this is only a redraw.
-    local function redrawFileChooser()
-        local fm = FileManager.instance
-        local fc = fm and fm.file_chooser
-        if not fc then return end
-        local ok, err = pcall(orig_refreshPath, fc)
-        if not ok then
-            logger.warn("FolderMemory: redraw after startup apply failed:", err)
-        end
-    end
-
+    -- The apply runs synchronously, *before* orig_refreshPath, so the list is
+    -- drawn once with the folder's settings. Deferring the first one to nextTick
+    -- would paint the folder with the previous settings and then draw it again.
+    -- `self` is the chooser about to be drawn: passing it matters for a freshly
+    -- built one, whose first refresh runs inside its own init, while FileManager
+    -- has not published it yet.
     FileChooser.refreshPath = function(self)
         if self.name == "filemanager" then
-            local path = self.path
-            if not _startup_done then
-                UIManager:nextTick(function()
-                    _startup_done = true
-                    if applyMemoryIfNeeded(path, self) then
-                        redrawFileChooser()
-                    end
-                end)
-            else
-                -- `self` is the chooser about to be drawn. Passing it matters for
-                -- a freshly built one, which refreshes from its own init while
-                -- FileManager has not published it yet.
-                applyMemoryIfNeeded(path, self)
-            end
+            applyMemoryIfNeeded(self.path, self)
         end
         local ok, err = pcall(orig_refreshPath, self)
         if not ok then
@@ -159,24 +128,15 @@ function hooks.setupHooks()
 
     -- ============================================================
     -- Hook 2: FileManager.onRefresh
-    -- Covers return from reader (UIManager shows existing FM instance)
-    -- and other cases where refreshPath hook might be shadowed by
-    -- other plugins (e.g., CoverBrowser wraps FileChooser methods).
+    -- Covers refreshes KOReader starts without navigating – file
+    -- operations and metadata changes. Coming back from a book is
+    -- Hook 1's job instead: opening one closes the file manager, so
+    -- the return builds a new one, chooser and all.
     -- ============================================================
     local orig_onRefresh = FileManager.onRefresh
     FileManager.onRefresh = function(self)
         if self.file_chooser then
-            local path = self.file_chooser.path
-            if not _startup_done then
-                UIManager:nextTick(function()
-                    _startup_done = true
-                    if applyMemoryIfNeeded(path, self.file_chooser) then
-                        redrawFileChooser()
-                    end
-                end)
-            else
-                applyMemoryIfNeeded(path, self.file_chooser)
-            end
+            applyMemoryIfNeeded(self.file_chooser.path, self.file_chooser)
         end
         local ok, err = pcall(orig_onRefresh, self)
         if not ok then

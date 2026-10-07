@@ -293,6 +293,35 @@ function Memory.captureCurrentSettings()
     return mem
 end
 
+--- The CoverBrowser plugin instance that governs the file browser, or nil when
+--- CoverBrowser is not loaded. FileManager.instance is published only at the end
+--- of FileManager:init, i.e. *after* the layout – and with it the file chooser's
+--- own first refreshPath – has been built, so the instance is nil exactly when
+--- the mode matters most: a chooser that has just been created. The chooser holds
+--- its ui, and the ui its plugins (registerModule ran long before the layout).
+local function _getCoverBrowser(chooser)
+    local ui = FileManager.instance or (chooser and chooser.ui)
+    return ui and ui.coverbrowser
+end
+
+--- Switch the file browser's display mode without letting CoverBrowser redraw.
+--- setDisplayMode ends by calling refreshFileManagerInstance, a full rebuild of
+--- the file list – from the item table the chooser still holds, which belongs to
+--- the folder being left. The callers of applyFolderMemory draw the list again
+--- right afterwards (the original refreshPath, and onRefresh through it) and that
+--- draw recalculates the dimensions itself, so the rebuild inside setDisplayMode
+--- only ever produces a second pass over a list that is about to be thrown away.
+--- Suppressed around the call; the mode itself – the swapped methods, the grid
+--- and the saved setting – is untouched. The method is put back even when
+--- CoverBrowser errors, and the error is then passed on as before.
+local function _setDisplayMode(coverbrowser, mode)
+    local orig_refresh = coverbrowser.refreshFileManagerInstance
+    coverbrowser.refreshFileManagerInstance = function() end
+    local ok, err = pcall(coverbrowser.setDisplayMode, coverbrowser, mode)
+    coverbrowser.refreshFileManagerInstance = orig_refresh
+    if not ok then error(err, 2) end
+end
+
 --- Apply saved memory to the current state (global settings + instance)
 --- The chooser can be passed in by a caller that has it while FileManager has
 --- not published it yet: a freshly built one runs its first refreshPath inside
@@ -352,11 +381,11 @@ function Memory.applyFolderMemory(mem, chooser)
 
     -- Display mode
     if mem.display_mode ~= nil then
-        local ui = FileManager.instance
-        if ui and ui.coverbrowser then
+        local coverbrowser = _getCoverBrowser(chooser)
+        if coverbrowser then
             -- "classic" is the empty/nil mode in CoverBrowser
             local dm = (mem.display_mode == "classic") and nil or mem.display_mode
-            ui.coverbrowser:setDisplayMode(dm)
+            _setDisplayMode(coverbrowser, dm)
         end
     end
 
