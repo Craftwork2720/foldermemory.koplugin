@@ -1016,6 +1016,8 @@ function menu.buildConfigSubmenu(self)
             return T(_("Sort by: %1"), collate.text)
         end,
         sub_item_table = buildSortBySubmenu(),
+        -- a line under the sort order itself, above the options that refine it
+        separator = true,
     }
 
     -- +--------------------+
@@ -1320,6 +1322,13 @@ function menu.buildConfigSubmenu(self)
         if menu_items[id] then
             table.insert(sub_item_table, menu_items[id])
         end
+    end
+
+    -- A line above "Clear saved settings", drawn under whichever entry happens
+    -- to precede it: the items-per-page rows above it depend on the display mode
+    -- and on the orientation, so which one is last is not fixed.
+    if #sub_item_table > 1 then
+        sub_item_table[#sub_item_table - 1].separator = true
     end
 
     return sub_item_table
